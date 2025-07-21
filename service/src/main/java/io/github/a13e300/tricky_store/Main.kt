@@ -52,7 +52,7 @@ fun verifySelf() {
             Logger.e("unverified module files! ($checksum != ${BuildConfig.CHECKSUM})")
             prop.writeText(kv.entries.joinToString("\n") { (k, v) ->
                 when (k) {
-                    "description" -> "description=×Module files corrupted, please re-download it from github.com/qwq233/TrickyStore"
+                    "description" -> "description=×Module files corrupted, please re-download it from github.com/beakthoven/TrickyStore"
                     "author" -> "author=5ec1cff, James Clef, beakthoven"
                     else -> "$k=$v"
                 }
