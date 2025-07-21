@@ -108,6 +108,7 @@ val osVersion: Int
     get() = getOsVersion(Build.VERSION.SDK_INT)
 
 private fun getOsVersion(num: Int) = when (num) {
+    Build.VERSION_CODES.BAKLAVA -> 160000
     Build.VERSION_CODES.VANILLA_ICE_CREAM -> 150000
     Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> 140000
     Build.VERSION_CODES.TIRAMISU -> 130000
@@ -115,7 +116,7 @@ private fun getOsVersion(num: Int) = when (num) {
     Build.VERSION_CODES.S -> 120000
     // i don't know whether rest of these are correct actually, so PR if anything is wrong.
     Build.VERSION_CODES.Q -> 110000
-    else -> 150000
+    else -> 160000
 }
 
 fun String.convertPatchLevel(long: Boolean) = runCatching {
