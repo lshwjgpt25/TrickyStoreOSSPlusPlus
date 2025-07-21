@@ -87,10 +87,6 @@ vendor=2024-11-01
 
 Note: this feature will only hack the result of KeyAttestation, it will not do resetprop, you need do it yourself.
 
-## TODO
-
-- Support automatic selection mode.
-
 PR is welcomed.
 
 ## Acknowledgement

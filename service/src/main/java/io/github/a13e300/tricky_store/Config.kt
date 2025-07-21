@@ -4,11 +4,17 @@ import android.content.pm.IPackageManager
 import android.os.Build
 import android.os.FileObserver
 import android.os.ServiceManager
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import com.akuleshov7.ktoml.Toml
 import com.akuleshov7.ktoml.TomlIndentation
 import com.akuleshov7.ktoml.TomlInputConfig
 import com.akuleshov7.ktoml.TomlOutputConfig
 import com.akuleshov7.ktoml.annotations.TomlComments
+import java.security.KeyPairGenerator
+import java.security.KeyStore
+import java.security.spec.ECGenParameterSpec;
+import java.security.SecureRandom
 import io.github.a13e300.tricky_store.keystore.CertHack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,19 +26,43 @@ import java.io.File
 object Config {
     private val hackPackages = mutableSetOf<String>()
     private val generatePackages = mutableSetOf<String>()
+    private val packageModes = mutableMapOf<String, Mode>()
+
+    enum class Mode {
+        AUTO, LEAF_HACK, GENERATE
+    }
 
     private fun updateTargetPackages(f: File?) = runCatching {
         hackPackages.clear()
         generatePackages.clear()
-        listOf("com.google.android.gsf", "com.google.android.gms", "com.android.vending").forEach { generatePackages.add(it) }
+        packageModes.clear()
+        // Default: always generate for these
+        listOf("com.google.android.gsf", "com.google.android.gms", "com.android.vending").forEach {
+            generatePackages.add(it)
+            packageModes[it] = Mode.GENERATE
+        }
         f?.readLines()?.forEach {
             if (it.isNotBlank() && !it.startsWith("#")) {
                 val n = it.trim()
-                if (n.endsWith("!")) generatePackages.add(n.removeSuffix("!").trim())
-                else hackPackages.add(n)
+                when {
+                    n.endsWith("!") -> {
+                        val pkg = n.removeSuffix("!").trim()
+                        generatePackages.add(pkg)
+                        packageModes[pkg] = Mode.GENERATE
+                    }
+                    n.endsWith("?") -> {
+                        val pkg = n.removeSuffix("?").trim()
+                        hackPackages.add(pkg)
+                        packageModes[pkg] = Mode.LEAF_HACK
+                    }
+                    else -> {
+                        // Auto mode
+                        packageModes[n] = Mode.AUTO
+                    }
+                }
             }
         }
-        Logger.i("update hack packages: $hackPackages, generate packages=$generatePackages")
+        Logger.i("update hack packages: $hackPackages, generate packages=$generatePackages, packageModes=$packageModes")
     }.onFailure {
         Logger.e("failed to update target files", it)
     }
@@ -46,8 +76,79 @@ object Config {
     private const val CONFIG_PATH = "/data/adb/tricky_store"
     private const val TARGET_FILE = "target.txt"
     private const val KEYBOX_FILE = "keybox.xml"
+    private const val TEE_STATUS_FILE = "tee_status"
     private const val PATCHLEVEL_FILE = "security_patch.txt"
     private val root = File(CONFIG_PATH)
+
+    @Volatile
+    private var teeBroken: Boolean? = null
+
+    private fun isTEEWorking(): Boolean {
+        val alias = "tee_attest_test_key"
+        return try {
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.app.ActivityThread.initializeMainlineModules();
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                android.security.keystore2.AndroidKeyStoreProvider.install();
+            } else {
+                android.security.keystore.AndroidKeyStoreProvider.install();
+            }
+
+            val keyStore = KeyStore.getInstance("AndroidKeyStore")
+            keyStore.load(null)
+
+            val keyPairGenerator = KeyPairGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+
+            val challenge = ByteArray(16).apply {
+                SecureRandom().nextBytes(this)
+            }
+
+            val parameterSpec = KeyGenParameterSpec.Builder(
+                alias,
+                KeyProperties.PURPOSE_SIGN
+            )
+                .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setAttestationChallenge(challenge)
+                .setIsStrongBoxBacked(false)
+                .build()
+
+            keyPairGenerator.initialize(parameterSpec)
+            keyPairGenerator.generateKeyPair()
+
+            keyStore.deleteEntry(alias)
+            true
+        } catch (e: Exception) {
+            Logger.e("TEE check failure: ${e.message}")
+            false
+        }
+    }
+
+
+    private fun storeTEEStatus(root: File) {
+        val statusFile = File(root, TEE_STATUS_FILE)
+        val status = isTEEWorking()
+        teeBroken = !status
+        try {
+            statusFile.writeText("teeBroken=${!status}")
+        } catch (e: Exception) {
+            Logger.e("Failed to write TEE status: ${e.message}")
+        }
+    }
+
+    private fun loadTEEStatus(root: File) {
+        val statusFile = File(root, TEE_STATUS_FILE)
+        if (statusFile.exists()) {
+            val line = statusFile.readText().trim()
+            teeBroken = line == "teeBroken=true"
+        } else {
+            teeBroken = null
+        }
+    }
 
     object ConfigObserver : FileObserver(root, CLOSE_WRITE or DELETE or MOVED_FROM or MOVED_TO) {
         override fun onEvent(event: Int, path: String?) {
@@ -79,6 +180,7 @@ object Config {
         } else {
             updateKeyBox(keybox)
         }
+        storeTEEStatus(root)
         val patchFile = File(root, PATCHLEVEL_FILE)
         updatePatchLevel(if (patchFile.exists()) patchFile else null)
         ConfigObserver.startWatching()
@@ -93,14 +195,34 @@ object Config {
         return iPm
     }
 
-    fun needHack(callingUid: Int) = kotlin.runCatching {
-        false
+    fun needHack(callingUid: Int): Boolean = kotlin.runCatching {
+        val ps = getPm()?.getPackagesForUid(callingUid) ?: return false
+        if (teeBroken == null) loadTEEStatus(root)
+        for (pkg in ps) {
+            when (packageModes[pkg]) {
+                Mode.LEAF_HACK -> return true
+                Mode.AUTO -> {
+                    if (teeBroken == false) return true
+                }
+                else -> {}
+            }
+        }
+        return false
     }.onFailure { Logger.e("failed to get packages", it) }.getOrNull() ?: false
 
-    fun needGenerate(callingUid: Int) = kotlin.runCatching {
-        if (generatePackages.isEmpty() && hackPackages.isEmpty()) return false
-        val ps = getPm()?.getPackagesForUid(callingUid)
-        ps?.any { it in generatePackages || it in hackPackages }
+    fun needGenerate(callingUid: Int): Boolean = kotlin.runCatching {
+        val ps = getPm()?.getPackagesForUid(callingUid) ?: return false
+        if (teeBroken == null) loadTEEStatus(root)
+        for (pkg in ps) {
+            when (packageModes[pkg]) {
+                Mode.GENERATE -> return true
+                Mode.AUTO -> {
+                    if (teeBroken == true) return true
+                }
+                else -> {}
+            }
+        }
+        return false
     }.onFailure { Logger.e("failed to get packages", it) }.getOrNull() ?: false
 
     @Volatile
