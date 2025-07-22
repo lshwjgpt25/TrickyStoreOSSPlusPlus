@@ -4,8 +4,6 @@ project(trick_store)
 find_package(cxx REQUIRED CONFIG)
 link_libraries(cxx::cxx)
 
-add_definitions(-std=c++20)
-
 add_library(elf_util STATIC elf_util/elf_util.cpp)
 add_library(my_logging STATIC logging/logging.cpp)
 
