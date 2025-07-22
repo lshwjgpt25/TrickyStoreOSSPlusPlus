@@ -6,21 +6,11 @@ import android.os.FileObserver
 import android.os.ServiceManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import com.akuleshov7.ktoml.Toml
-import com.akuleshov7.ktoml.TomlIndentation
-import com.akuleshov7.ktoml.TomlInputConfig
-import com.akuleshov7.ktoml.TomlOutputConfig
-import com.akuleshov7.ktoml.annotations.TomlComments
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.spec.ECGenParameterSpec;
 import java.security.SecureRandom
 import io.github.a13e300.tricky_store.keystore.CertHack
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import java.io.File
 
 object Config {

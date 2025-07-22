@@ -11,14 +11,10 @@ kotlinxCoroutinesAndroid = "1.10.2"
 annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
 bcpkix-jdk18on = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bcpkix-jdk18on" }
 cxx = { module = "org.lsposed.libcxx:libcxx", version = "28.1.13356709" }
-ktoml-core = { module = "com.akuleshov7:ktoml-core", version.ref = "ktoml" }
-ktoml-file = { module = "com.akuleshov7:ktoml-file", version.ref = "ktoml" }
-kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 dev-rikka-hidden-stub = { module = "dev.rikka.hidden:stub", version.ref = "hidden-api" }
 
 [plugins]
 agp-app = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin"}
 lsplugin-cmaker = { id = "org.lsposed.lsplugin.cmaker", version = "1.2" }
