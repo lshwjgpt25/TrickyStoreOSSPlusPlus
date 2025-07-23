@@ -60,20 +60,28 @@ private fun getCustomPatchLevel(key: String, long: Boolean): Int? {
     } ?: return null
     if (value.equals("no", ignoreCase = true)) return null
     if (value.equals("prop", ignoreCase = true)) return null
+
     // Accept both 20250301 and 2025-03-01
     val normalized = value.replace("-", "")
     return try {
         if (long) {
             if (normalized.length == 8) normalized.substring(0, 4).toInt() * 10000 + normalized.substring(4, 6).toInt() * 100 + normalized.substring(6, 8).toInt()
             else if (normalized.length == 6) normalized.substring(0, 4).toInt() * 10000 + normalized.substring(4, 6).toInt() * 100
-            else null
+            else {
+                Logger.e("CustomPatchLevel (long) invalid length for key=$key: $normalized")
+                null
+            }
         } else {
             if (normalized.length == 8) normalized.substring(0, 4).toInt() * 100 + normalized.substring(4, 6).toInt()
             else if (normalized.length == 6) normalized.substring(0, 4).toInt() * 100 + normalized.substring(4, 6).toInt()
-            else null
+            else {
+                Logger.e("CustomPatchLevel invalid length for key=$key: $normalized")
+                null
+            }
         }
-    } catch (_: Exception) {
-null
+    } catch (e: Exception) {
+        Logger.e("CustomPatchLevel parse error for key=$key, value=$value, normalized=$normalized", e)
+        null
     }
 }
 

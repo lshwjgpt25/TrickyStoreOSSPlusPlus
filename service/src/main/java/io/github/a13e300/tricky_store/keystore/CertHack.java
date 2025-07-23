@@ -210,6 +210,12 @@ public final class CertHack {
 
             byte[] verifiedBootKey = UtilKt.getBootKey();
             byte[] verifiedBootHash = null;
+
+            var vendorPatchLevel = UtilKt.getVendorPatchLevelLong();
+            var bootPatchLevel = UtilKt.getBootPatchLevelLong();
+            var osPatchLevel = UtilKt.getPatchLevel();
+            var osVersion = UtilKt.getOsVersion();
+
             try {
                 if (!(rootOfTrust instanceof ASN1Sequence r)) {
                     throw new CertificateParsingException("Expected sequence for root of trust, found "
@@ -232,7 +238,17 @@ public final class CertHack {
             };
 
             ASN1Sequence hackedRootOfTrust = new DERSequence(rootOfTrustEnc);
+
+            ASN1TaggedObject spoofedVendorPatchLevel = new DERTaggedObject(true, 718, new ASN1Integer(vendorPatchLevel));
+            ASN1TaggedObject spoofedBootPatchLevel = new DERTaggedObject(true, 719, new ASN1Integer(bootPatchLevel));
+            ASN1TaggedObject spoofedOsPatchLevel = new DERTaggedObject(true, 706, new ASN1Integer(osPatchLevel));
+            ASN1TaggedObject spoofedOsVersion = new DERTaggedObject(true, 705, new ASN1Integer(osVersion));
             ASN1TaggedObject rootOfTrustTagObj = new DERTaggedObject(704, hackedRootOfTrust);
+
+            vector.add(spoofedVendorPatchLevel);
+            vector.add(spoofedBootPatchLevel);
+            vector.add(spoofedOsPatchLevel);
+            vector.add(spoofedOsVersion);
             vector.add(rootOfTrustTagObj);
 
             ASN1Sequence hackEnforced = new DERSequence(vector);
@@ -317,6 +333,11 @@ public final class CertHack {
             signer = new JcaContentSignerBuilder(leaf.getSigAlgName())
                     .build(k.keyPair.getPrivate());
 
+            var vendorPatchLevel = UtilKt.getVendorPatchLevelLong();
+            var bootPatchLevel = UtilKt.getBootPatchLevelLong();
+            var osPatchLevel = UtilKt.getPatchLevel();
+            var osVersion = UtilKt.getOsVersion();
+
             byte[] verifiedBootKey = UtilKt.getBootKey();
             byte[] verifiedBootHash = null;
             try {
@@ -341,7 +362,17 @@ public final class CertHack {
             };
 
             ASN1Sequence hackedRootOfTrust = new DERSequence(rootOfTrustEnc);
+
+            ASN1TaggedObject spoofedVendorPatchLevel = new DERTaggedObject(true, 718, new ASN1Integer(vendorPatchLevel));
+            ASN1TaggedObject spoofedBootPatchLevel = new DERTaggedObject(true, 719, new ASN1Integer(bootPatchLevel));
+            ASN1TaggedObject spoofedOsPatchLevel = new DERTaggedObject(true, 706, new ASN1Integer(osPatchLevel));
+            ASN1TaggedObject spoofedOsVersion = new DERTaggedObject(true, 705, new ASN1Integer(osVersion));
             ASN1TaggedObject rootOfTrustTagObj = new DERTaggedObject(704, hackedRootOfTrust);
+
+            vector.add(spoofedVendorPatchLevel);
+            vector.add(spoofedBootPatchLevel);
+            vector.add(spoofedOsPatchLevel);
+            vector.add(spoofedOsVersion);
             vector.add(rootOfTrustTagObj);
 
             ASN1Sequence hackEnforced = new DERSequence(vector);
