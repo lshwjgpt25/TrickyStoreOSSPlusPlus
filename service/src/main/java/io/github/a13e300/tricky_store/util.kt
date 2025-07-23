@@ -115,8 +115,8 @@ private fun getOsVersion(num: Int) = when (num) {
     Build.VERSION_CODES.S_V2 -> 120100
     Build.VERSION_CODES.S -> 120000
     // i don't know whether rest of these are correct actually, so PR if anything is wrong.
-    Build.VERSION_CODES.Q -> 110000
-    Build.VERSION_CODES.R -> 100000
+    Build.VERSION_CODES.R -> 110000
+    Build.VERSION_CODES.Q -> 100000
     else -> 160000
 }
 
