@@ -496,12 +496,16 @@ public final class CertHack {
             ).getSubject();
 
             if (attestPurpose) {
+                Logger.d("keyPairs keys: " + SecurityLevelInterceptor.Companion.getKeyPairs().keySet());
+                Logger.d("Looking for: uid=" + uid + " alias=" + attestKeyDescriptor.alias);
                 var info = SecurityLevelInterceptor.Companion.getKeyPairs(uid, attestKeyDescriptor.alias);
                 if (info != null) {
                     rootKP = info.getFirst();
                     issuer = new X509CertificateHolder(
                             info.getSecond().get(0).getEncoded()
                     ).getSubject();
+                } else {
+                    Logger.e("Attestation key info not found, falling back to default keybox");
                 }
             }
 

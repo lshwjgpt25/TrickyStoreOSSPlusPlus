@@ -56,6 +56,24 @@
    kotlinx.serialization.KSerializer serializer(...);
 }
 
+# Keep all fields and methods in SecurityLevelInterceptor
+-keep class io.github.a13e300.tricky_store.SecurityLevelInterceptor {
+    *;
+}
+
+# Keep Key and Info inner classes used in maps
+-keepclassmembers class io.github.a13e300.tricky_store.SecurityLevelInterceptor$Key {
+    *;
+}
+-keepclassmembers class io.github.a13e300.tricky_store.SecurityLevelInterceptor$Info {
+    *;
+}
+
+# Keep Parcelable CREATOR fields
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator *;
+}
+
 -repackageclasses
 -allowaccessmodification
 -overloadaggressively

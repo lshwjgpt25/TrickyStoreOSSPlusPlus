@@ -17,6 +17,7 @@ import io.github.a13e300.tricky_store.keystore.Utils
 import java.security.KeyPair
 import java.security.cert.Certificate
 import java.util.concurrent.ConcurrentHashMap
+import androidx.annotation.Keep
 
 class SecurityLevelInterceptor(
     private val original: IKeystoreSecurityLevel,
@@ -30,11 +31,17 @@ class SecurityLevelInterceptor(
         private val createOperationTransaction =
             getTransactCode(IKeystoreSecurityLevel.Stub::class.java, "createOperation")
 
+        @Keep
         val keys = ConcurrentHashMap<Key, Info>()
+
+        @Keep
         val keyPairs = ConcurrentHashMap<Key, Pair<KeyPair, List<Certificate>>>()
 
+        @Keep
         fun getKeyResponse(uid: Int, alias: String): KeyEntryResponse? =
             keys[Key(uid, alias)]?.response
+
+        @Keep
         fun getKeyPairs(uid: Int, alias: String): Pair<KeyPair, List<Certificate>>? =
             keyPairs[Key(uid, alias)]
     }
