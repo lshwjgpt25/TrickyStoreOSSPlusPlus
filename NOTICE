@@ -1,0 +1,16 @@
+This project is licensed under the GNU General Public License v3.0
+(see LICENSE file).
+
+Third-party components:
+-----------------------
+
+1. Portions of this project include code from the Android Open Source Project (AOSP) located in:
+       app/src/main/cpp/external/AOSP/
+   The corresponding Apache License 2.0 is provided in:
+       app/src/main/cpp/external/AOSP/LICENSE
+
+2. This project includes the LSPlt library as a Git submodule located in:
+       app/src/main/cpp/external/LSPlt/
+   LSPlt is licensed under the GNU Lesser General Public License v3.0 (LGPLv3).
+   The license can be viewed at:
+       https://github.com/LSPosed/LSPlt/blob/master/LICENSE
