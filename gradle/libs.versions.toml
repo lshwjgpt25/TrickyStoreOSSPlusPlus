@@ -1,10 +1,19 @@
 [versions]
 agp = "8.12.0"
+annotation = "1.9.1"
+hidden-api = "4.4.0"
+jdk18on = "1.81"
 kotlin = "2.2.0"
+libcxx = "28.1.13356709"
 
 [libraries]
+annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
+dev-rikka-hidden-stub = { module = "dev.rikka.hidden:stub", version.ref = "hidden-api" }
+org-bouncycastle-bcpkix-jdk18on = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "jdk18on" }
+org-lsposed-libcxx-libcxx = { module = "org.lsposed.libcxx:libcxx", version.ref = "libcxx" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 
