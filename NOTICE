@@ -11,6 +11,8 @@ Third-party components:
 
 2. This project includes the LSPlt library as a Git submodule located in:
        app/src/main/cpp/external/LSPlt/
+   This submodule now uses a fork maintained at:
+        https://github.com/JingMatrix/LSPlt
    LSPlt is licensed under the GNU Lesser General Public License v3.0 (LGPLv3).
    The license can be viewed at:
-       https://github.com/LSPosed/LSPlt/blob/master/LICENSE
+       https://github.com/JingMatrix/LSPlt/blob/master/LICENSE
