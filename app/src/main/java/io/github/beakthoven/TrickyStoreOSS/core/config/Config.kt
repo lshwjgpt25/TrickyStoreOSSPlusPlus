@@ -32,11 +32,6 @@ object Config {
         hackPackages.clear()
         generatePackages.clear()
         packageModes.clear()
-        // Default: always generate for these
-        listOf("com.google.android.gsf", "com.google.android.gms", "com.android.vending").forEach {
-            generatePackages.add(it)
-            packageModes[it] = Mode.GENERATE
-        }
         f?.readLines()?.forEach {
             if (it.isNotBlank() && !it.startsWith("#")) {
                 val n = it.trim()
