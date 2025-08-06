@@ -9,7 +9,7 @@
 #include <string>
 
 #ifndef LOG_TAG
-#    define LOG_TAG "TrickyStore"
+#    define LOG_TAG "TrickyStoreOSS"
 #endif
 
 #ifndef NDEBUG

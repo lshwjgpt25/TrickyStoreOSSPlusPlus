@@ -17,7 +17,7 @@ import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 
 object CertificateUtils {
-    private const val TAG = "CertificateUtils"
+    private const val TAG = "TrickyStoreOSS"
     
     sealed class CertificateResult<out T> {
         data class Success<T>(val data: T) : CertificateResult<T>()
