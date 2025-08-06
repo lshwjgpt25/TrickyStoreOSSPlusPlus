@@ -7,7 +7,7 @@ A **FOSS** alternative to the proprietary [TrickyStore](https://github.com/5ec1c
 We all know about the [multiple violations and questionable practices by the author of TrickyStore](docs/5ec1cff-violations.md).  
 Because of this, I decided to create a **complete rewrite from scratch**, based on:  
 
-- Various projects mentioned in (Acknowledgement)[#Acknowledgement] section
+- Various projects mentioned in [Acknowledgement](https://github.com/beakthoven/TrickyStoreOSS?tab=readme-ov-file#%EF%B8%8F-acknowledgement) section
 - Official changelogs and expected behavior of newer releases  
 - My own feature additions and fixes that were part of an earlier fork of the older codebase  
 
