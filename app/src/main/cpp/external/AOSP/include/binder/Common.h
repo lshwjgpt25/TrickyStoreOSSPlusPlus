@@ -39,11 +39,8 @@
 //
 // For a more detailed explanation of this strategy, see
 // https://www.gnu.org/software/gnulib/manual/html_node/Exported-Symbols-of-Shared-Libraries.html
-#if BUILDING_LIBBINDER
+
 #define LIBBINDER_EXPORTED __attribute__((__visibility__("default")))
-#else
-#define LIBBINDER_EXPORTED
-#endif
 
 // For stuff that is exported but probably shouldn't be. It behaves the exact
 // same way as LIBBINDER_EXPORTED, only exists to help track what we want

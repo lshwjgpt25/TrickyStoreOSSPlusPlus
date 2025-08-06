@@ -26,9 +26,6 @@
 #include <vector>
 
 #include <binder/unique_fd.h>
-#ifndef BINDER_DISABLE_NATIVE_HANDLE
-#include <cutils/native_handle.h>
-#endif
 #include <utils/Errors.h>
 #include <utils/RefBase.h>
 #include <utils/String16.h>
@@ -51,7 +48,6 @@ template <typename T> class LightFlattenable;
 class IBinder;
 class IPCThreadState;
 class ProcessState;
-class RpcSession;
 class String8;
 class TextOutput;
 namespace binder {
@@ -63,7 +59,6 @@ class RecordedTransaction;
 
 class Parcel {
     friend class IPCThreadState;
-    friend class RpcState;
 
 public:
     class ReadableBlob;
@@ -125,10 +120,6 @@ public:
     // the wire binder protocol may change (data is written differently when it
     // is for an RPC transaction).
     LIBBINDER_EXPORTED void markForBinder(const sp<IBinder>& binder);
-
-    // Whenever possible, markForBinder should be preferred. This method is
-    // called automatically on reply Parcels for RPC transactions.
-    LIBBINDER_EXPORTED void markForRpc(const sp<RpcSession>& session);
 
     // Whether this Parcel is written for RPC transactions (after calls to
     // markForBinder or markForRpc).
@@ -346,14 +337,6 @@ public:
     status_t            writeVectorSize(const std::optional<std::vector<T>>& val);
     template<typename T>
     status_t            writeVectorSize(const std::unique_ptr<std::vector<T>>& val) __attribute__((deprecated("use std::optional version instead")));
-
-#ifndef BINDER_DISABLE_NATIVE_HANDLE
-    // Place a native_handle into the parcel (the native_handle's file-
-    // descriptors are dup'ed, so it is safe to delete the native_handle
-    // when this function returns).
-    // Doesn't take ownership of the native_handle.
-    LIBBINDER_EXPORTED status_t writeNativeHandle(const native_handle* handle);
-#endif
 
     // Place a file descriptor into the parcel.  The given fd must remain
     // valid for the lifetime of the parcel.
@@ -601,14 +584,6 @@ public:
     // response headers rather than doing it by hand.
     LIBBINDER_EXPORTED int32_t readExceptionCode() const;
 
-#ifndef BINDER_DISABLE_NATIVE_HANDLE
-    // Retrieve native_handle from the parcel. This returns a copy of the
-    // parcel's native_handle (the caller takes ownership). The caller
-    // must free the native_handle with native_handle_close() and
-    // native_handle_delete().
-    LIBBINDER_EXPORTED native_handle* readNativeHandle() const;
-#endif
-
     // Retrieve a file descriptor from the parcel.  This returns the raw fd
     // in the parcel, which you do not own -- use dup() to get your own copy.
     LIBBINDER_EXPORTED int readFileDescriptor() const;
@@ -670,12 +645,6 @@ private:
     size_t              ipcObjectsCount() const;
     void ipcSetDataReference(const uint8_t* data, size_t dataSize, const binder_size_t* objects,
                              size_t objectsCount, release_func relFunc);
-    // Takes ownership even when an error is returned.
-    [[nodiscard]] status_t rpcSetDataReference(
-            const sp<RpcSession>& session, const uint8_t* data, size_t dataSize,
-            const uint32_t* objectTable, size_t objectTableSize,
-            std::vector<std::variant<binder::unique_fd, binder::borrowed_fd>>&& ancillaryFds,
-            release_func relFunc);
 
     status_t            finishWrite(size_t len);
     void                releaseObjects();
@@ -1350,30 +1319,10 @@ private:
         mutable bool mFdsKnown = true;
         mutable bool mHasFds = false;
     };
-    // Fields only needed when parcelling for RPC Binder.
-    struct RpcFields {
-        RpcFields(const sp<RpcSession>& session);
+    
+    // TrickyStoreOSS stub
+    struct RpcFields {};
 
-        // Should always be non-null.
-        const sp<RpcSession> mSession;
-
-        enum ObjectType : int32_t {
-            TYPE_BINDER_NULL = 0,
-            TYPE_BINDER = 1,
-            // FD to be passed via native transport (Trusty IPC or UNIX domain socket).
-            TYPE_NATIVE_FILE_DESCRIPTOR = 2,
-        };
-
-        // Sorted.
-        std::vector<uint32_t> mObjectPositions;
-
-        // File descriptors referenced by the parcel data. Should be indexed
-        // using the offsets in the parcel data. Don't assume the list is in the
-        // same order as `mObjectPositions`.
-        //
-        // Boxed to save space. Lazy allocated.
-        std::unique_ptr<std::vector<std::variant<binder::unique_fd, binder::borrowed_fd>>> mFds;
-    };
     std::variant<KernelFields, RpcFields> mVariantFields;
 
     // Pointer to KernelFields in mVariantFields if present.

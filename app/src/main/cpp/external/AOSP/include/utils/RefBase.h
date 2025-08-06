@@ -221,7 +221,7 @@
 // LightRefBase used to be declared in this header, so we have to include it
 #include <utils/LightRefBase.h>
 
-#include <utils/StrongPointer.h>
+#include "utils/StrongPointer.h"
 #include <utils/TypeHelpers.h>
 
 // ---------------------------------------------------------------------------
