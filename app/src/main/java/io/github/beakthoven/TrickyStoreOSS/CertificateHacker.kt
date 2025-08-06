@@ -736,7 +736,7 @@ object CertificateHacker {
                 DEROctetString(hash)
             )
             val rootOfTrustSeq = DERSequence(rootOfTrustEncodables)
- 
+            
             val purpose = DERSet(fromIntList(params.purpose))
             val algorithm = ASN1Integer(params.algorithm.toLong())
             val keySize = ASN1Integer(params.keySize.toLong())
