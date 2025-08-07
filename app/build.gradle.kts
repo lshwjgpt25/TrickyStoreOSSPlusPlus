@@ -49,6 +49,8 @@ android {
                 arguments += "-DCMAKE_CXX_STANDARD=20"
                 arguments += "-DCMAKE_C_STANDARD=23"
                 arguments += "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON"
+                arguments += "-DLSPLT_BUILD_SHARED=OFF"
+                arguments += "-DLSPLT_STANDALONE=ON"
 
                 cppFlags += "-std=c++20"
                 cppFlags += "-fno-exceptions"
