@@ -9,11 +9,20 @@ import android.system.keystore2.KeyEntryResponse
 import android.system.keystore2.KeyMetadata
 import android.util.Log
 import io.github.beakthoven.TrickyStoreOSS.CertificateUtils.putCertificateChain
+import org.bouncycastle.asn1.ASN1Encodable
+import org.bouncycastle.asn1.DEROctetString
+import org.bouncycastle.openssl.PEMKeyPair
+import org.bouncycastle.openssl.PEMParser
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
+import org.bouncycastle.util.io.pem.PemReader
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.StringReader
+import java.security.KeyPair
 import java.security.cert.Certificate
 import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
+import java.security.cert.CertificateParsingException
 import java.security.cert.X509Certificate
 
 object CertificateUtils {
@@ -32,6 +41,11 @@ object CertificateUtils {
             is Success -> data
             is Error -> null
         }
+    }
+    
+    sealed class ParseResult<out T> {
+        data class Success<T>(val data: T) : ParseResult<T>()
+        data class Error(val message: String, val cause: Throwable? = null) : ParseResult<Nothing>()
     }
     
     fun ByteArray?.toCertificate(): X509Certificate? {
@@ -122,6 +136,48 @@ object CertificateUtils {
             } else {
                 certificateChain = null
             }
+        }
+    }
+    
+    // Certificate parsing utilities
+    fun parseKeyPair(keyContent: String): ParseResult<PEMKeyPair> {
+        return try {
+            PEMParser(StringReader(keyContent.trimLine())).use { parser ->
+                val pemObject = parser.readObject()
+                if (pemObject is PEMKeyPair) {
+                    ParseResult.Success(pemObject)
+                } else {
+                    ParseResult.Error("Invalid PEM key pair format")
+                }
+            }
+        } catch (t: Throwable) {
+            ParseResult.Error("Failed to parse PEM key pair", t)
+        }
+    }
+    
+    fun parseCertificate(certContent: String): ParseResult<Certificate> {
+        return try {
+            PemReader(StringReader(certContent.trimLine())).use { reader ->
+                val pemObject = reader.readPemObject()
+                val certificate = CertificateFactory.getInstance("X.509").generateCertificate(
+                    ByteArrayInputStream(pemObject.content)
+                )
+                ParseResult.Success(certificate)
+            }
+        } catch (t: Throwable) {
+            ParseResult.Error("Failed to parse certificate", t)
+        }
+    }
+    
+    fun convertPemToKeyPair(pemKeyPair: PEMKeyPair): KeyPair {
+        return JcaPEMKeyConverter().getKeyPair(pemKeyPair)
+    }
+    
+    @Throws(CertificateParsingException::class)
+    fun getByteArrayFromAsn1(asn1Encodable: ASN1Encodable): ByteArray {
+        return when (asn1Encodable) {
+            is DEROctetString -> asn1Encodable.octets
+            else -> throw CertificateParsingException("Expected DEROctetString, got ${asn1Encodable::class.simpleName}")
         }
     }
 }

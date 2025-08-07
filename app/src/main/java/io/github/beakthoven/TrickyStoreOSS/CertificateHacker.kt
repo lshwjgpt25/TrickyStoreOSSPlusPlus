@@ -27,18 +27,13 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.openssl.PEMKeyPair
-import org.bouncycastle.openssl.PEMParser
-import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
-import org.bouncycastle.util.io.pem.PemReader
 import java.io.ByteArrayInputStream
-import java.io.StringReader
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.security.*
 import java.security.cert.Certificate
 import java.security.cert.CertificateFactory
-import java.security.cert.CertificateParsingException
 import java.security.cert.X509Certificate
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.RSAKeyGenParameterSpec
@@ -217,14 +212,11 @@ object CertificateHacker {
     }
     
     private val keyboxes = ConcurrentHashMap<String, KeyBox>()
-    private val leafAlgorithm = ConcurrentHashMap<KeyIdentifier, String>()
+    private val leafAlgorithms = ConcurrentHashMap<KeyIdentifier, String>()
     
-    private const val ATTESTATION_APPLICATION_ID_PACKAGE_INFOS_INDEX = 0
-    private const val ATTESTATION_APPLICATION_ID_SIGNATURE_DIGESTS_INDEX = 1
-    private const val ATTESTATION_PACKAGE_INFO_PACKAGE_NAME_INDEX = 0
-    private const val ATTESTATION_PACKAGE_INFO_VERSION_INDEX = 1
+
     
-    fun canHack(): Boolean = keyboxes.isNotEmpty()
+    fun hasKeyboxes(): Boolean = keyboxes.isNotEmpty()
     
     private data class Digest(val digest: ByteArray) {
         override fun equals(other: Any?): Boolean {
@@ -237,46 +229,13 @@ object CertificateHacker {
         override fun hashCode(): Int = digest.contentHashCode()
     }
     
-    private fun parseKeyPair(keyContent: String): ParseResult<PEMKeyPair> {
-        return try {
-            PEMParser(StringReader(keyContent.trimLine())).use { parser ->
-                val pemObject = parser.readObject()
-                if (pemObject is PEMKeyPair) {
-                    ParseResult.Success(pemObject)
-                } else {
-                    ParseResult.Error("Invalid PEM key pair format")
-                }
-            }
-        } catch (t: Throwable) {
-            ParseResult.Error("Failed to parse PEM key pair", t)
-        }
-    }
+
     
-    private fun parseCertificate(certContent: String): ParseResult<Certificate> {
-        return try {
-            PemReader(StringReader(certContent.trimLine())).use { reader ->
-                val pemObject = reader.readPemObject()
-                val certificate = certificateFactory.generateCertificate(
-                    ByteArrayInputStream(pemObject.content)
-                )
-                ParseResult.Success(certificate)
-            }
-        } catch (t: Throwable) {
-            ParseResult.Error("Failed to parse certificate", t)
-        }
-    }
-    
-    @Throws(CertificateParsingException::class)
-    private fun getByteArrayFromAsn1(asn1Encodable: ASN1Encodable): ByteArray {
-        return when (asn1Encodable) {
-            is DEROctetString -> asn1Encodable.octets
-            else -> throw CertificateParsingException("Expected DEROctetString, got ${asn1Encodable::class.simpleName}")
-        }
-    }
+
     
     fun readFromXml(xmlData: String?) {
         keyboxes.clear()
-        leafAlgorithm.clear()
+        leafAlgorithms.clear()
         
         if (xmlData == null) {
             Logger.i("Clearing all keyboxes")
@@ -339,18 +298,18 @@ object CertificateHacker {
                     is XmlParser.ParseResult.Error -> throw Exception(certResult.message, certResult.cause)
                 }
                 
-                when (val certParseResult = parseCertificate(certContent)) {
-                    is ParseResult.Success -> certificateChain.add(certParseResult.data)
-                    is ParseResult.Error -> throw Exception(certParseResult.message, certParseResult.cause)
+                when (val certParseResult = CertificateUtils.parseCertificate(certContent)) {
+                    is CertificateUtils.ParseResult.Success -> certificateChain.add(certParseResult.data)
+                    is CertificateUtils.ParseResult.Error -> throw Exception(certParseResult.message, certParseResult.cause)
                 }
             }
             
-            val pemKeyPair = when (val keyParseResult = parseKeyPair(privateKeyContent)) {
-                is ParseResult.Success -> keyParseResult.data
-                is ParseResult.Error -> throw Exception(keyParseResult.message, keyParseResult.cause)
+            val pemKeyPair = when (val keyParseResult = CertificateUtils.parseKeyPair(privateKeyContent)) {
+                is CertificateUtils.ParseResult.Success -> keyParseResult.data
+                is CertificateUtils.ParseResult.Error -> throw Exception(keyParseResult.message, keyParseResult.cause)
             }
             
-            val keyPair = JcaPEMKeyConverter().getKeyPair(pemKeyPair)
+            val keyPair = CertificateUtils.convertPemToKeyPair(pemKeyPair)
             
             val algorithmName = when (keyboxAlgorithm.lowercase()) {
                 "ecdsa" -> KeyProperties.KEY_ALGORITHM_EC
@@ -378,22 +337,65 @@ object CertificateHacker {
             
             val extensionBytes = leaf.getExtensionValue(ATTESTATION_OID.id)
                 ?: return certificateChain // No attestation extension, return original
+
+            val leafHolder = X509CertificateHolder(leaf.encoded)
+            val extension = leafHolder.getExtension(ATTESTATION_OID)
+            val sequence = ASN1Sequence.getInstance(extension.extnValue.octets)
+            val encodables = sequence.toArray()
+            val teeEnforced = encodables[7] as ASN1Sequence
             
-            hackCertificateWithAttestation(leaf, certificateChain)
+            val vector = ASN1EncodableVector()
+            var rootOfTrust: ASN1Encodable? = null
+            
+            teeEnforced.forEach { element ->
+                val taggedObject = element as ASN1TaggedObject
+                if (taggedObject.tagNo == 704) {
+                    rootOfTrust = taggedObject.baseObject.toASN1Primitive()
+                } else {
+                    vector.add(taggedObject)
+                }
+            }
+            
+            val keybox = keyboxes[leaf.publicKey.algorithm]
+                ?: throw UnsupportedOperationException("Unsupported algorithm: ${leaf.publicKey.algorithm}")
+            
+            val certificates = LinkedList(keybox.certificates)
+            val builder = X509v3CertificateBuilder(
+                X509CertificateHolder(certificates[0].encoded).subject,
+                leafHolder.serialNumber,
+                leafHolder.notBefore,
+                leafHolder.notAfter,
+                leafHolder.subject,
+                leafHolder.subjectPublicKeyInfo
+            )
+            
+            val signer = JcaContentSignerBuilder(leaf.sigAlgName).build(keybox.keyPair.private)
+            
+            val hackedExtension = createHackedAttestationExtension(rootOfTrust, vector, encodables)
+            builder.addExtension(hackedExtension)
+            
+            leafHolder.extensions.extensionOIDs.forEach { oid ->
+                if (oid.id != ATTESTATION_OID.id) {
+                    builder.addExtension(leafHolder.getExtension(oid))
+                }
+            }
+            
+            certificates.addFirst(JcaX509CertificateConverter().getCertificate(builder.build(signer)))
+            certificates.toTypedArray()
         } catch (t: Throwable) {
             Logger.e("Failed to hack certificate chain", t)
             certificateChain
         }
     }
     
-    fun hackCertificateChainCA(caList: ByteArray?, alias: String, uid: Int): ByteArray {
+    fun hackCACertificateChain(caList: ByteArray?, alias: String, uid: Int): ByteArray {
         if (caList == null) {
             throw UnsupportedOperationException("CA list is null!")
         }
         
         return try {
             val key = KeyIdentifier(alias, uid)
-            val algorithm = leafAlgorithm.remove(key)
+            val algorithm = leafAlgorithms.remove(key)
                 ?: throw UnsupportedOperationException("No algorithm found for key $key")
             
             val keybox = keyboxes[algorithm]
@@ -406,7 +408,7 @@ object CertificateHacker {
         }
     }
     
-    fun hackCertificateChainUSR(certificate: ByteArray?, alias: String, uid: Int): ByteArray {
+    fun hackUserCertificate(certificate: ByteArray?, alias: String, uid: Int): ByteArray {
         if (certificate == null) {
             throw UnsupportedOperationException("Leaf certificate is null!")
         }
@@ -420,191 +422,8 @@ object CertificateHacker {
                 ?: return certificate // No attestation extension, return original
             
             val keyIdentifier = KeyIdentifier(alias, uid)
-            leafAlgorithm[keyIdentifier] = leaf.publicKey.algorithm
+            leafAlgorithms[keyIdentifier] = leaf.publicKey.algorithm
             
-            hackSingleCertificate(leaf)?.encoded ?: certificate
-        } catch (t: Throwable) {
-            Logger.e("Failed to hack user certificate", t)
-            certificate
-        }
-    }
-    
-    fun generateKeyPair(params: KeyGenParameters): KeyPair? {
-        return try {
-            when (params.algorithm) {
-                Algorithm.EC -> {
-                    Logger.d("Generating EC keypair of size ${params.keySize}")
-                    buildECKeyPair(params)
-                }
-                Algorithm.RSA -> {
-                    Logger.d("Generating RSA keypair of size ${params.keySize}")
-                    buildRSAKeyPair(params)
-                }
-                else -> {
-                    Logger.e("Unsupported algorithm: ${params.algorithm}")
-                    null
-                }
-            }
-        } catch (t: Throwable) {
-            Logger.e("Failed to generate key pair", t)
-            null
-        }
-    }
-    
-    fun generateChain(uid: Int, params: KeyGenParameters, keyPair: KeyPair): List<ByteArray>? {
-        return try {
-            val keybox = getKeyboxForAlgorithm(params.algorithm)
-                ?: return null
-            
-            val issuer = X509CertificateHolder(keybox.certificates[0].encoded).subject
-            val leaf = buildCertificate(keyPair, keybox, params, issuer, uid)
-            
-            val chain = mutableListOf<Certificate>().apply {
-                add(leaf)
-                addAll(keybox.certificates)
-            }
-            
-            CertificateUtils.run { chain.toByteArrayList() }
-        } catch (t: Throwable) {
-            Logger.e("Failed to generate certificate chain", t)
-            null
-        }
-    }
-    
-    fun generateKeyPair(
-        uid: Int,
-        descriptor: KeyDescriptor,
-        attestKeyDescriptor: KeyDescriptor?,
-        params: KeyGenParameters
-    ): Pair<KeyPair, List<Certificate>>? {
-        Logger.i("Requested KeyPair with alias: ${descriptor.alias}")
-        
-        val isAttestPurpose = attestKeyDescriptor != null
-        if (isAttestPurpose) {
-            Logger.i("Requested KeyPair with attestKey: ${attestKeyDescriptor?.alias}")
-        }
-        
-        return try {
-            val keyPair = generateKeyPair(params) ?: return null
-            val keybox = getKeyboxForAlgorithm(params.algorithm) ?: return null
-            
-            val (rootKeyPair, issuer) = if (isAttestPurpose) {
-                val attestInfo = getAttestationKeyInfo(uid, attestKeyDescriptor!!)
-                if (attestInfo != null) {
-                    attestInfo.first to attestInfo.second
-                } else {
-                    keybox.keyPair to X509CertificateHolder(keybox.certificates[0].encoded).subject
-                }
-            } else {
-                keybox.keyPair to X509CertificateHolder(keybox.certificates[0].encoded).subject
-            }
-            
-            val leaf = buildCertificate(keyPair, keybox, params, issuer, uid, rootKeyPair)
-            val chain = if (isAttestPurpose) mutableListOf() else mutableListOf<Certificate>().apply { addAll(keybox.certificates) }
-            chain.add(0, leaf)
-            
-            Logger.d("Successfully generated certificate for alias: ${descriptor.alias}")
-            Pair(keyPair, chain)
-        } catch (t: Throwable) {
-            Logger.e("Failed to generate key pair with certificates", t)
-            null
-        }
-    }
-    
-    private fun buildECKeyPair(params: KeyGenParameters): KeyPair {
-        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
-        Security.addProvider(BouncyCastleProvider())
-        
-        val spec = ECGenParameterSpec(params.ecCurveName)
-        val keyPairGenerator = KeyPairGenerator.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME)
-        keyPairGenerator.initialize(spec)
-        return keyPairGenerator.generateKeyPair()
-    }
-    
-    private fun buildRSAKeyPair(params: KeyGenParameters): KeyPair {
-        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
-        Security.addProvider(BouncyCastleProvider())
-        
-        val spec = RSAKeyGenParameterSpec(params.keySize, params.rsaPublicExponent)
-        val keyPairGenerator = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME)
-        keyPairGenerator.initialize(spec)
-        return keyPairGenerator.generateKeyPair()
-    }
-    
-    private fun getKeyboxForAlgorithm(algorithm: Int): KeyBox? {
-        val algorithmName = when (algorithm) {
-            Algorithm.EC -> KeyProperties.KEY_ALGORITHM_EC
-            Algorithm.RSA -> KeyProperties.KEY_ALGORITHM_RSA
-            else -> {
-                Logger.e("Unsupported algorithm: $algorithm")
-                return null
-            }
-        }
-        return keyboxes[algorithmName]
-    }
-    
-    private fun getAttestationKeyInfo(uid: Int, attestKeyDescriptor: KeyDescriptor): Pair<KeyPair, X500Name>? {
-        Logger.d("Looking for attestation key: uid=$uid alias=${attestKeyDescriptor.alias}")
-        
-        val keyInfo = SecurityLevelInterceptor.getKeyPairs(uid, attestKeyDescriptor.alias)
-        return if (keyInfo != null) {
-            val issuer = X509CertificateHolder(keyInfo.second[0].encoded).subject
-            Pair(keyInfo.first, issuer)
-        } else {
-            Logger.e("Attestation key info not found, falling back to default keybox")
-            null
-        }
-    }
-    
-    private fun hackCertificateWithAttestation(leaf: X509Certificate, originalChain: Array<Certificate>): Array<Certificate> {
-        val leafHolder = X509CertificateHolder(leaf.encoded)
-        val extension = leafHolder.getExtension(ATTESTATION_OID)
-        val sequence = ASN1Sequence.getInstance(extension.extnValue.octets)
-        val encodables = sequence.toArray()
-        val teeEnforced = encodables[7] as ASN1Sequence
-        
-        val vector = ASN1EncodableVector()
-        var rootOfTrust: ASN1Encodable? = null
-        
-        teeEnforced.forEach { element ->
-            val taggedObject = element as ASN1TaggedObject
-            if (taggedObject.tagNo == 704) {
-                rootOfTrust = taggedObject.baseObject.toASN1Primitive()
-            } else {
-                vector.add(taggedObject)
-            }
-        }
-        
-        val keybox = keyboxes[leaf.publicKey.algorithm]
-            ?: throw UnsupportedOperationException("Unsupported algorithm: ${leaf.publicKey.algorithm}")
-        
-        val certificates = LinkedList(keybox.certificates)
-        val builder = X509v3CertificateBuilder(
-            X509CertificateHolder(certificates[0].encoded).subject,
-            leafHolder.serialNumber,
-            leafHolder.notBefore,
-            leafHolder.notAfter,
-            leafHolder.subject,
-            leafHolder.subjectPublicKeyInfo
-        )
-        
-        val signer = JcaContentSignerBuilder(leaf.sigAlgName).build(keybox.keyPair.private)
-        
-        val hackedExtension = createHackedAttestationExtension(rootOfTrust, vector, encodables)
-        builder.addExtension(hackedExtension)
-        
-        leafHolder.extensions.extensionOIDs.forEach { oid ->
-            if (oid.id != ATTESTATION_OID.id) {
-                builder.addExtension(leafHolder.getExtension(oid))
-            }
-        }
-        
-        certificates.addFirst(JcaX509CertificateConverter().getCertificate(builder.build(signer)))
-        return certificates.toTypedArray()
-    }
-    
-    private fun hackSingleCertificate(leaf: X509Certificate): Certificate? {
-        return try {
             val leafHolder = X509CertificateHolder(leaf.encoded)
             val extension = leafHolder.getExtension(ATTESTATION_OID)
             val sequence = ASN1Sequence.getInstance(extension.extnValue.octets)
@@ -645,10 +464,131 @@ object CertificateHacker {
                     builder.addExtension(leafHolder.getExtension(oid))
                 }
             }
-            
-            JcaX509CertificateConverter().getCertificate(builder.build(signer))
+
+            JcaX509CertificateConverter().getCertificate(builder.build(signer)).encoded
         } catch (t: Throwable) {
-            Logger.e("Failed to hack single certificate", t)
+            Logger.e("Failed to hack user certificate", t)
+            certificate
+        }
+    }
+    
+    fun generateKeyPair(params: KeyGenParameters): KeyPair? = runCatching {
+        when (params.algorithm) {
+            Algorithm.EC -> {
+                Logger.d("Generating EC keypair of size ${params.keySize}")
+                buildECKeyPair(params)
+            }
+            Algorithm.RSA -> {
+                Logger.d("Generating RSA keypair of size ${params.keySize}")
+                buildRSAKeyPair(params)
+            }
+            else -> {
+                Logger.e("Unsupported algorithm: ${params.algorithm}")
+                null
+            }
+        }
+    }.onFailure { 
+        Logger.e("Failed to generate key pair", it) 
+    }.getOrNull()
+    
+    fun generateChain(uid: Int, params: KeyGenParameters, keyPair: KeyPair): List<ByteArray>? = runCatching {
+        val keybox = getKeyboxForAlgorithm(params.algorithm) ?: return null
+        
+        val issuer = X509CertificateHolder(keybox.certificates[0].encoded).subject
+        val leaf = buildCertificate(keyPair, keybox, params, issuer, uid)
+        
+        val chain = buildList {
+            add(leaf)
+            addAll(keybox.certificates)
+        }
+        
+        CertificateUtils.run { chain.toByteArrayList() }
+    }.onFailure { 
+        Logger.e("Failed to generate certificate chain", it) 
+    }.getOrNull()
+    
+    fun generateKeyPair(
+        uid: Int,
+        descriptor: KeyDescriptor,
+        attestKeyDescriptor: KeyDescriptor?,
+        params: KeyGenParameters
+    ): Pair<KeyPair, List<Certificate>>? = runCatching {
+        Logger.i("Requested KeyPair with alias: ${descriptor.alias}")
+        
+        val hasAttestKey = attestKeyDescriptor != null
+        if (hasAttestKey) {
+            Logger.i("Requested KeyPair with attestKey: ${attestKeyDescriptor?.alias}")
+        }
+        
+        val keyPair = generateKeyPair(params) ?: return null
+        val keybox = getKeyboxForAlgorithm(params.algorithm) ?: return null
+        
+        val (signingKeyPair, issuer) = if (hasAttestKey) {
+            getAttestationKeyInfo(uid, attestKeyDescriptor!!)?.let { 
+                it.first to it.second 
+            } ?: (keybox.keyPair to X509CertificateHolder(keybox.certificates[0].encoded).subject)
+        } else {
+            keybox.keyPair to X509CertificateHolder(keybox.certificates[0].encoded).subject
+        }
+        
+        val leaf = buildCertificate(keyPair, keybox, params, issuer, uid, signingKeyPair)
+        val chain = buildList {
+            add(leaf)
+            if (!hasAttestKey) {
+                addAll(keybox.certificates)
+            }
+        }
+        
+        Logger.d("Successfully generated certificate for alias: ${descriptor.alias}")
+        Pair(keyPair, chain)
+    }.onFailure { 
+        Logger.e("Failed to generate key pair with certificates", it) 
+    }.getOrNull()
+    
+    private fun buildECKeyPair(params: KeyGenParameters): KeyPair {
+        setupBouncyCastle()
+        val spec = ECGenParameterSpec(params.ecCurveName)
+        val keyPairGenerator = KeyPairGenerator.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME)
+        keyPairGenerator.initialize(spec)
+        return keyPairGenerator.generateKeyPair()
+    }
+    
+    private fun buildRSAKeyPair(params: KeyGenParameters): KeyPair {
+        setupBouncyCastle()
+        val spec = RSAKeyGenParameterSpec(params.keySize, params.rsaPublicExponent)
+        val keyPairGenerator = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME)
+        keyPairGenerator.initialize(spec)
+        return keyPairGenerator.generateKeyPair()
+    }
+    
+    private fun setupBouncyCastle() {
+        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
+        Security.addProvider(BouncyCastleProvider())
+    }
+    
+    private fun mapAlgorithmToName(algorithm: Int): String? = when (algorithm) {
+        Algorithm.EC -> KeyProperties.KEY_ALGORITHM_EC
+        Algorithm.RSA -> KeyProperties.KEY_ALGORITHM_RSA
+        else -> {
+            Logger.e("Unsupported algorithm: $algorithm")
+            null
+        }
+    }
+
+    private fun getKeyboxForAlgorithm(algorithm: Int): KeyBox? {
+        val algorithmName = mapAlgorithmToName(algorithm) ?: return null
+        return keyboxes[algorithmName]
+    }
+    
+    private fun getAttestationKeyInfo(uid: Int, attestKeyDescriptor: KeyDescriptor): Pair<KeyPair, X500Name>? {
+        Logger.d("Looking for attestation key: uid=$uid alias=${attestKeyDescriptor.alias}")
+        
+        val keyInfo = SecurityLevelInterceptor.getKeyPairs(uid, attestKeyDescriptor.alias)
+        return if (keyInfo != null) {
+            val issuer = X509CertificateHolder(keyInfo.second[0].encoded).subject
+            Pair(keyInfo.first, issuer)
+        } else {
+            Logger.e("Attestation key info not found, falling back to default keybox")
             null
         }
     }
@@ -663,7 +603,7 @@ object CertificateHacker {
         
         try {
             if (originalRootOfTrust is ASN1Sequence) {
-                verifiedBootHash = getByteArrayFromAsn1(originalRootOfTrust.getObjectAt(3))
+                verifiedBootHash = CertificateUtils.getByteArrayFromAsn1(originalRootOfTrust.getObjectAt(3))
             }
         } catch (t: Throwable) {
             Logger.e("Failed to get verified boot hash from original, using generated", t)
@@ -715,11 +655,12 @@ object CertificateHacker {
         builder.addExtension(Extension.keyUsage, true, KeyUsage(KeyUsage.keyCertSign))
         builder.addExtension(createAttestationExtension(params, uid))
         
-        val contentSigner = when (params.algorithm) {
-            Algorithm.EC -> JcaContentSignerBuilder("SHA256withECDSA").build(signingKeyPair.private)
-            Algorithm.RSA -> JcaContentSignerBuilder("SHA256withRSA").build(signingKeyPair.private)
+        val signerAlgorithm = when (params.algorithm) {
+            Algorithm.EC -> "SHA256withECDSA"
+            Algorithm.RSA -> "SHA256withRSA"
             else -> throw IllegalArgumentException("Unsupported algorithm: ${params.algorithm}")
         }
+        val contentSigner = JcaContentSignerBuilder(signerAlgorithm).build(signingKeyPair.private)
         
         return JcaX509CertificateConverter().getCertificate(builder.build(contentSigner))
     }
@@ -737,10 +678,10 @@ object CertificateHacker {
             )
             val rootOfTrustSeq = DERSequence(rootOfTrustEncodables)
             
-            val purpose = DERSet(fromIntList(params.purpose))
+            val purpose = DERSet(params.purpose.map { ASN1Integer(it.toLong()) }.toTypedArray())
             val algorithm = ASN1Integer(params.algorithm.toLong())
             val keySize = ASN1Integer(params.keySize.toLong())
-            val digest = DERSet(fromIntList(params.digest))
+            val digest = DERSet(params.digest.map { ASN1Integer(it.toLong()) }.toTypedArray())
             val ecCurve = ASN1Integer(params.ecCurve.toLong())
             val noAuthRequired = DERNull.INSTANCE
             
@@ -798,9 +739,7 @@ object CertificateHacker {
         }
     }
     
-    private fun fromIntList(list: List<Int>): Array<ASN1Encodable> {
-        return list.map { ASN1Integer(it.toLong()) }.toTypedArray()
-    }
+
     
     private fun getAsn1OctetString(
         teeEnforcedEncodables: Array<ASN1Encodable>,

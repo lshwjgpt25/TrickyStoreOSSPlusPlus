@@ -74,7 +74,7 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
         data: Parcel
     ): Result {
         if (code == getKeyEntryTransaction) {
-            if (CertificateHacker.canHack()) {
+            if (CertificateHacker.hasKeyboxes()) {
                 Logger.d("intercept pre  $target uid=$callingUid pid=$callingPid dataSz=${data.dataSize()}")
                 kotlin.runCatching {
                     data.enforceInterface(IKeystoreService.DESCRIPTOR)

@@ -8,8 +8,8 @@ package io.github.beakthoven.TrickyStoreOSS
 import android.os.Build
 import io.github.beakthoven.TrickyStoreOSS.core.config.Config
 import io.github.beakthoven.TrickyStoreOSS.core.logging.Logger
-import io.github.beakthoven.TrickyStoreOSS.interceptors.KeystoreInterceptor
 import io.github.beakthoven.TrickyStoreOSS.interceptors.Keystore2Interceptor
+import io.github.beakthoven.TrickyStoreOSS.interceptors.KeystoreInterceptor
 
 private const val RETRY_DELAY_MS = 1000L
 private const val SERVICE_SLEEP_MS = 1000000L

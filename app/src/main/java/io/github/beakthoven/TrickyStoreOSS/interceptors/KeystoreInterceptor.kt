@@ -64,7 +64,7 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
         callingPid: Int,
         data: Parcel
     ): Result {
-        if (CertificateHacker.canHack()) {
+        if (CertificateHacker.hasKeyboxes()) {
             if (code == getTransaction) {
                 if (Config.needHack(callingUid)) {
                     return Continue
@@ -218,12 +218,12 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
             var response = reply.createByteArray()
             when {
                 alias.startsWith(Credentials.USER_CERTIFICATE) -> {
-                    response = CertificateHacker.hackCertificateChainUSR(response!!, alias.extractAlias(), callingUid)
+                    response = CertificateHacker.hackUserCertificate(response!!, alias.extractAlias(), callingUid)
                     Logger.i("Hacked leaf certificate for uid=$callingUid")
                     return createByteArrayReply(response)
                 }
                 alias.startsWith(Credentials.CA_CERTIFICATE) -> {
-                    response = CertificateHacker.hackCertificateChainCA(response!!, alias.extractAlias(), callingUid)
+                    response = CertificateHacker.hackCACertificateChain(response!!, alias.extractAlias(), callingUid)
                     Logger.i("Hacked CA certificate chain for uid=$callingUid")
                     return createByteArrayReply(response)
                 }
