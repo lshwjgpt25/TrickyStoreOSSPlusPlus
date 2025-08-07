@@ -10,11 +10,9 @@ add_library(my_logging STATIC logging/logging.cpp)
 target_include_directories(my_logging PUBLIC logging/include)
 target_link_libraries(my_logging log)
 
-set(LSPLT_SOURCES external/LSPlt/lsplt/src/main/jni/lsplt.cc external/LSPlt/lsplt/src/main/jni/elf_util.cc)
-add_library(lsplt STATIC ${LSPLT_SOURCES})
-target_include_directories(lsplt PUBLIC external/LSPlt/lsplt/src/main/jni/include)
-target_include_directories(lsplt PRIVATE external/LSPlt/lsplt/src/main/jni)
-target_link_libraries(lsplt PUBLIC my_logging)
+# LSPlt configuration
+set(LSPLT_STANDALONE ON)
+add_subdirectory(external/LSPlt/lsplt/src/main/jni)
 
 # libutils stub
 add_library(utils SHARED stub/stub_utils.cpp)
@@ -26,8 +24,8 @@ target_include_directories(binder PUBLIC external/AOSP/include)
 target_link_libraries(binder PRIVATE utils)
 
 add_executable(libinject.so inject/main.cpp inject/utils.cpp)
-target_link_libraries(libinject.so PRIVATE lsplt my_logging)
+target_link_libraries(libinject.so PRIVATE lsplt_static my_logging)
 
 add_library(${CMAKE_PROJECT_NAME} SHARED binder_interceptor.cpp)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC external/linux-kernel/include)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE log binder utils lsplt my_logging)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE log binder utils lsplt_static my_logging)
