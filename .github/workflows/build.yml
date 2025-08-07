@@ -5,14 +5,12 @@ on:
     branches: [ "main" ]
     paths-ignore:
       - '**.md'
-      - '**.txt'
       - '.github/**'
       - '!.github/workflows/**'
   pull_request:
     branches: [ "main" ]
     paths-ignore:
       - '**.md'
-      - '**.txt'
       - '.github/**'
       - '!.github/workflows/**'
   workflow_dispatch:
