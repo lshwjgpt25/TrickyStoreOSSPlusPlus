@@ -12,6 +12,7 @@ target_link_libraries(my_logging log)
 
 # LSPlt configuration
 set(LSPLT_STANDALONE ON)
+set(LSPLT_BUILD_SHARED OFF)
 add_subdirectory(external/LSPlt/lsplt/src/main/jni)
 
 # libutils stub
