@@ -1,0 +1,72 @@
+name: Publish Changelog
+
+on:
+  release:
+    types: [published, edited]
+
+jobs:
+  generate-files:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Clone main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Calculate version code
+        id: vercode
+        run: |
+          echo "versionCode=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Fetch release metadata
+        id: release
+        env:
+          ASSETS: ${{ toJson(github.event.release.assets) }}
+        run: |
+          echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "${{ github.event.release.body }}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("release.zip")) | .browser_download_url' | head -n1)
+          if [ -z "$URL" ]; then
+            echo "::error::Missing .zip asset in release uploads."
+            echo "$ASSETS" | jq -r '.[].name'
+            exit 1
+          fi
+          echo "zip_url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Checkout changelog branch
+        uses: actions/checkout@v4
+        with:
+          ref: changelog
+          path: changelog-branch
+
+      - name: Write changelog and JSON
+        run: |
+          cd changelog-branch
+
+          echo "${{ steps.release.outputs.notes }}" > changelog.md
+
+          cat <<EOF > update.json
+          {
+            "version": "${{ steps.release.outputs.tag }}",
+            "versionCode": ${{ steps.vercode.outputs.versionCode }},
+            "zipUrl": "${{ steps.release.outputs.zip_url }}",
+            "changelog": "https://raw.githubusercontent.com/beakthoven/TrickyStore/changelog/changelog.md"
+          }
+          EOF
+
+      - name: Commit and push updates
+        run: |
+          cd changelog-branch
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add changelog.md update.json
+          git commit -m "Update metadata for ${{ steps.release.outputs.tag }}"
+          git push origin changelog -f
