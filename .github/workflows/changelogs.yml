@@ -57,7 +57,7 @@ jobs:
             "version": "${{ steps.release.outputs.tag }}",
             "versionCode": ${{ steps.vercode.outputs.versionCode }},
             "zipUrl": "${{ steps.release.outputs.zip_url }}",
-            "changelog": "https://raw.githubusercontent.com/beakthoven/TrickyStore/changelog/changelog.md"
+            "changelog": "https://raw.githubusercontent.com/beakthoven/TrickyStoreOSS/changelog/changelog.md"
           }
           EOF
 
