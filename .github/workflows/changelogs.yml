@@ -32,7 +32,7 @@ jobs:
           echo "${{ github.event.release.body }}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("release.zip")) | .browser_download_url' | head -n1)
+          URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("Release.zip")) | .browser_download_url' | head -n1)
           if [ -z "$URL" ]; then
             echo "::error::Missing .zip asset in release uploads."
             echo "$ASSETS" | jq -r '.[].name'
