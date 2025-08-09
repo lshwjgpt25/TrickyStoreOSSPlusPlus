@@ -40,6 +40,7 @@ import java.security.spec.RSAKeyGenParameterSpec
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import javax.security.auth.x500.X500Principal
+import android.os.Build
 
 object CertificateHacker {
     
@@ -774,34 +775,41 @@ object CertificateHacker {
     private fun createApplicationId(uid: Int): DEROctetString {
         val pm = Config.getPm() ?: throw IllegalStateException("PackageManager not found!")
         val packages = pm.getPackagesForUid(uid) ?: throw IllegalStateException("No packages for UID $uid")
-        
-        val packageInfoArray = Array(packages.size) { i ->
-            val packageName = packages[i]
-            val packageInfo = pm.getPackageInfoCompat(packageName, PackageManager.GET_SIGNING_CERTIFICATES.toLong(), uid / 100000)
-            
-            DERSequence(arrayOf(
-                DEROctetString(packageName.toByteArray(StandardCharsets.UTF_8)),
-                ASN1Integer(packageInfo.longVersionCode)
-            ))
-        }
-        
-        val signatures = mutableSetOf<Digest>()
+
         val messageDigest = MessageDigest.getInstance("SHA-256")
-        
-        packages.forEach { packageName ->
-            val packageInfo = pm.getPackageInfoCompat(packageName, PackageManager.GET_SIGNING_CERTIFICATES.toLong(), uid / 100000)
-            packageInfo.signingInfo?.apkContentsSigners?.forEach { signature ->
+        val signatures = mutableSetOf<Digest>()
+
+        val packageInfos = packages.map { packageName ->
+            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES.toLong(), uid / 100000)
+            } else {
+                pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES, uid / 100000)
+            }
+
+            info.signingInfo?.signingCertificateHistory?.forEach { signature ->
                 signatures.add(Digest(messageDigest.digest(signature.toByteArray())))
             }
+
+            info
         }
-        
+
+        val packageInfoArray = packageInfos.map { info ->
+            DERSequence(
+                arrayOf(
+                    DEROctetString(info.packageName.toByteArray(StandardCharsets.UTF_8)),
+                    ASN1Integer(info.longVersionCode)
+                )
+            )
+        }.toTypedArray()
+
         val signaturesArray = signatures.map { DEROctetString(it.digest) }.toTypedArray()
-        
+
         val applicationIdArray = arrayOf(
             DERSet(packageInfoArray),
             DERSet(signaturesArray)
         )
-        
+
         return DEROctetString(DERSequence(applicationIdArray).encoded)
     }
+
 }

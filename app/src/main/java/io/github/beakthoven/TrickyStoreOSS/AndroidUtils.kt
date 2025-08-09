@@ -141,14 +141,6 @@ fun String.convertPatchLevel(isLong: Boolean): Int = runCatching {
     Logger.e("Invalid patch level format: $this", it) 
 }.getOrDefault(202404)
 
-fun IPackageManager.getPackageInfoCompat(name: String, flags: Long, userId: Int) =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        getPackageInfo(name, flags, userId)
-    } else {
-        @Suppress("DEPRECATION")
-        getPackageInfo(name, flags.toInt(), userId)
-    }
-
 val apexInfos: List<Pair<String, Long>> by lazy {
     runCatching {
         val packageManager = IPackageManager.Stub.asInterface(ServiceManager.getService("package"))
