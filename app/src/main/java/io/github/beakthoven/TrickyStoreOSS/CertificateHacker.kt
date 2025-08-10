@@ -229,10 +229,23 @@ object CertificateHacker {
         
         override fun hashCode(): Int = digest.contentHashCode()
     }
-    
 
-    
+    fun String.sanitizeXml(): String {
+        var content = this
 
+        val boms = listOf(
+            "\uFEFF",
+            "\uFFFE",
+            "\u0000\uFEFF"
+        )
+        content = content.trimStart()
+        for (bom in boms) {
+            content = content.removePrefix(bom)
+        }
+        content = content.trimStart()
+
+        return content.trimEnd()
+    }
     
     fun readFromXml(xmlData: String?) {
         keyboxes.clear()
@@ -244,7 +257,7 @@ object CertificateHacker {
         }
         
         try {
-            val xmlParser = XmlParser(xmlData)
+            val xmlParser = XmlParser(xmlData.sanitizeXml())
             
             val numberOfKeyboxesResult = xmlParser.obtainPath("AndroidAttestation.NumberOfKeyboxes")
             val numberOfKeyboxes = when (numberOfKeyboxesResult) {
