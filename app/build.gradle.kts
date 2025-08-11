@@ -25,7 +25,7 @@ fun String.execute(currentWorkingDir: File = File("./")): String {
 
 val gitCommitCount = "git rev-list HEAD --count".execute().toInt()
 val gitCommitHash = "git rev-parse --verify --short HEAD".execute()
-val verName = "v2.0.0"
+val verName = "v2.1.0"
 
 android {
     namespace = "io.github.beakthoven.TrickyStoreOSS"
