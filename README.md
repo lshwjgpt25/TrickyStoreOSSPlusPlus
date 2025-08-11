@@ -119,6 +119,7 @@ PRs are welcome. Thank you for supporting true open-source development.
 
 - [BootloaderSpoofer](https://github.com/chiteroman/BootloaderSpoofer) (dead, relied on forks and mirrors)
 - [FrameworkPatch](https://github.com/chiteroman/FrameworkPatch) (dead, relied on forks and mirrors)
+- [KeyAttestation](https://github.com/vvb2060/KeyAttestation)
 - [KeystoreInjection](https://github.com/aviraxp/Zygisk-KeystoreInjection)
 - [LSPlt-JingMatrix](https://github.com/JingMatrix/LSPlt)
 - [LSPosed](https://github.com/LSPosed/LSPosed)
