@@ -721,8 +721,11 @@ object CertificateHacker {
                 DERTaggedObject(true, 706, osPatchLevel),
                 DERTaggedObject(true, 718, vendorPatchLevel),
                 DERTaggedObject(true, 719, bootPatchLevel),
-                DERTaggedObject(true, 724, moduleHash)
             )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                teeEnforcedObjects.add(DERTaggedObject(true, 724, moduleHash))
+            }
             
             params.brand?.let { teeEnforcedObjects.add(DERTaggedObject(true, 710, DEROctetString(it))) }
             params.device?.let { teeEnforcedObjects.add(DERTaggedObject(true, 711, DEROctetString(it))) }
@@ -760,9 +763,9 @@ object CertificateHacker {
         softwareEnforcedEncodables: Array<ASN1Encodable>,
         params: KeyGenParameters
     ): ASN1OctetString {
-        val attestationVersion = ASN1Integer(400L)
+        val attestationVersion = ASN1Integer(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 400L else 300L)
         val attestationSecurityLevel = ASN1Enumerated(1)
-        val keymasterVersion = ASN1Integer(400L)
+        val keymasterVersion = ASN1Integer(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 400L else 300L)
         val keymasterSecurityLevel = ASN1Enumerated(1)
         val attestationChallenge = DEROctetString(params.attestationChallenge ?: ByteArray(0))
         val uniqueId = DEROctetString(ByteArray(0))
