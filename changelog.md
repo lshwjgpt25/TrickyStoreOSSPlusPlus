@@ -1,6 +1,6 @@
 # Changes:
 
-- Fixed play integrity certificate generation #11 
+- Fixed play integrity in certificate generation mode #11 
 - Modified xml parser to handle unclean and messy keybox.xml #12 
 - Fixed support for Android 10 and 11 #13 
 
