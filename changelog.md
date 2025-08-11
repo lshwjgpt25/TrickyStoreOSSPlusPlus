@@ -1,16 +1,10 @@
 # Changes:
 
-- Rewritten and relicensed codebase under gplv3
-- Introduced auto mode selection based on TEE status
-- Fixed attest key support in leaf hack mode
-- Bumped gradle to 9.0.0
-- Bumped AGP to 8.12.0
-- Update target.txt with other common checkers (#9 , @osm0sis)
-- Sync service.sh with official and tidy (#8 , @osm0sis)
-- Switched to JingMatrix's LSPlt fork
-- Updated cpp standard to c++23
-- Fixed security patch spoofing for leaf hack mode
-- Added Android 10 support for fetching os version
+- Fixed play integrity certificate generation #11 
+- Modified xml parser to handle unclean and messy keybox.xml #12 
+- Fixed support for Android 10 and 11 #13 
+
+**Full Changelog**: https://github.com/beakthoven/TrickyStoreOSS/compare/v2.0.0...v2.1.0
 
 > [!IMPORTANT]
 > DO NOT REPORT ANY ISSUE TO THE ORIGINAL TRICKY STORE CHANNEL/GROUP 
