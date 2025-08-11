@@ -16,7 +16,10 @@ Tricky Store OSS is **rightfully licensed under GPLv3**, ensuring it stays free 
 ## ✨ Features
 
 - 100% **FOSS**
-- Developed to match the proprietary implementation’s behavior and feature set as closely as possible  
+- Developed to match the proprietary implementation’s behavior and feature set as closely as possible
+
+## 📱 Requirements
+- Android 10 or above
 
 ## 📦 Installtion
 
