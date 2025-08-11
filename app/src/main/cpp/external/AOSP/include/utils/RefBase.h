@@ -542,7 +542,9 @@ wp<T> wp<T>::fromExisting(T* other) {
     if (!other) return nullptr;
 
     auto refs = other->getWeakRefs();
-    refs->incWeakRequireWeak(other);
+    //TrickyStoreOSS edit
+    //refs->incWeakRequireWeak(other);
+    refs->incWeak(other);
 
     wp<T> ret;
     ret.m_ptr = other;

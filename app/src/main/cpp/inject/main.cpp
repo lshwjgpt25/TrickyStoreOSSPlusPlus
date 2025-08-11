@@ -225,12 +225,46 @@ static std::optional<int> transfer_fd_to_remote(int pid, const char *lib_path, s
     return transferred_fd;
 }
 
+static std::string get_remote_dlerror(int pid, struct user_regs_struct &regs, const std::vector<lsplt::MapInfo> &local_map,
+                                     const std::vector<lsplt::MapInfo> &remote_map, uintptr_t libc_return_addr) {
+    auto dlerror_addr = find_func_addr(local_map, remote_map, constants::kLibdlModule, "dlerror");
+    if (!dlerror_addr) {
+        return "Failed to find dlerror function";
+    }
+
+    std::vector<uintptr_t> args;
+    auto dlerror_str_addr = remote_call(pid, regs, reinterpret_cast<uintptr_t>(dlerror_addr), libc_return_addr, args);
+    if (dlerror_str_addr == 0) {
+        return "dlerror returned null";
+    }
+
+    auto strlen_addr = find_func_addr(local_map, remote_map, constants::kLibcModule, "strlen");
+    if (!strlen_addr) {
+        return "Failed to find strlen function";
+    }
+
+    args.clear();
+    args.push_back(dlerror_str_addr);
+    auto dlerror_len = remote_call(pid, regs, reinterpret_cast<uintptr_t>(strlen_addr), libc_return_addr, args);
+    if (dlerror_len <= 0 || dlerror_len > 1024) {
+        return "Invalid dlerror string length";
+    }
+
+    std::string err;
+    err.resize(dlerror_len + 1, 0);
+    if (read_proc(pid, dlerror_str_addr, err.data(), dlerror_len) != dlerror_len) {
+        return "Failed to read dlerror string";
+    }
+    err.resize(dlerror_len);
+    return err;
+}
+
 static std::optional<uintptr_t> remote_dlopen(int pid, struct user_regs_struct &regs, const std::vector<lsplt::MapInfo> &local_map,
                                               const std::vector<lsplt::MapInfo> &remote_map, int lib_fd, const char *lib_path,
                                               uintptr_t libc_return_addr) {
     auto dlopen_addr = find_func_addr(local_map, remote_map, constants::kLibdlModule, "android_dlopen_ext");
     if (!dlopen_addr) {
-        LOGE("Failed to find android_dlopen_ext in %s", constants::kLibdlModule);
+        LOGW("Failed to find android_dlopen_ext in %s,", constants::kLibdlModule);
         return std::nullopt;
     }
 
@@ -245,7 +279,8 @@ static std::optional<uintptr_t> remote_dlopen(int pid, struct user_regs_struct &
     uintptr_t remote_handle = remote_call(pid, regs, reinterpret_cast<uintptr_t>(dlopen_addr), libc_return_addr, args);
 
     if (remote_handle == 0) {
-        LOGE("Remote dlopen failed for library: %s", lib_path);
+        std::string error_msg = get_remote_dlerror(pid, regs, local_map, remote_map, libc_return_addr);
+        LOGW("Primary dlopen failed for library: %s, dlerror: %s", lib_path, error_msg.c_str());
         return std::nullopt;
     }
 
@@ -268,7 +303,8 @@ static std::optional<uintptr_t> remote_find_entry(int pid, struct user_regs_stru
     uintptr_t entry_addr = remote_call(pid, regs, reinterpret_cast<uintptr_t>(dlsym_addr), libc_return_addr, args);
 
     if (entry_addr == 0) {
-        LOGE("Failed to find entry symbol '%s' in remote library", constants::kEntrySymbol);
+        std::string error_msg = get_remote_dlerror(pid, regs, local_map, remote_map, libc_return_addr);
+        LOGE("Failed to find entry symbol '%s' in remote library, dlerror: %s", constants::kEntrySymbol, error_msg.c_str());
         return std::nullopt;
     }
 
