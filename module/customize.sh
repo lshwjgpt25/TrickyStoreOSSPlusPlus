@@ -1,6 +1,6 @@
 # shellcheck disable=SC2034
 SKIPUNZIP=1
-MIN_SDK=31
+MIN_SDK=29
 CONFIG_DIR=/data/adb/tricky_store
 
 # --- Installation Context Check ---
