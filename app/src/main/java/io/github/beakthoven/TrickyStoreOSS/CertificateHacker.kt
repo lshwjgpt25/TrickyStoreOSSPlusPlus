@@ -723,7 +723,7 @@ object CertificateHacker {
                 DERTaggedObject(true, 719, bootPatchLevel),
             )
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (io.github.beakthoven.TrickyStoreOSS.attestVersion >= 400) {
                 teeEnforcedObjects.add(DERTaggedObject(true, 724, moduleHash))
             }
             
@@ -763,9 +763,9 @@ object CertificateHacker {
         softwareEnforcedEncodables: Array<ASN1Encodable>,
         params: KeyGenParameters
     ): ASN1OctetString {
-        val attestationVersion = ASN1Integer(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 400L else 300L)
+        val attestationVersion = ASN1Integer(io.github.beakthoven.TrickyStoreOSS.attestVersion.toLong())
         val attestationSecurityLevel = ASN1Enumerated(1)
-        val keymasterVersion = ASN1Integer(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 400L else 300L)
+        val keymasterVersion = ASN1Integer(io.github.beakthoven.TrickyStoreOSS.keymasterVersion.toLong())
         val keymasterSecurityLevel = ASN1Enumerated(1)
         val attestationChallenge = DEROctetString(params.attestationChallenge ?: ByteArray(0))
         val uniqueId = DEROctetString(ByteArray(0))

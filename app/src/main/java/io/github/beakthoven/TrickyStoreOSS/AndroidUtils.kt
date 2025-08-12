@@ -130,6 +130,24 @@ private val osVersionMap = mapOf(
 
 private fun getOsVersion(sdkVersion: Int): Int = osVersionMap[sdkVersion] ?: 160000
 
+private val attestVersionMap = mapOf(
+    Build.VERSION_CODES.Q to 4,                   // Keymaster 4.1
+    Build.VERSION_CODES.R to 4,                   // Keymaster 4.1
+    Build.VERSION_CODES.S to 100,                 // KeyMint 1.0
+    Build.VERSION_CODES.S_V2 to 100,              // KeyMint 1.0
+    Build.VERSION_CODES.TIRAMISU to 200,          // KeyMint 2.0
+    Build.VERSION_CODES.UPSIDE_DOWN_CAKE to 300,  // KeyMint 3.0
+    Build.VERSION_CODES.VANILLA_ICE_CREAM to 300, // KeyMint 3.0
+    Build.VERSION_CODES.BAKLAVA to 400            // KeyMint 4.0
+)
+
+val attestVersion: Int
+    get() = attestVersionMap[Build.VERSION.SDK_INT] ?: 400
+
+val keymasterVersion: Int
+    get() = if (attestVersion == 4) 41 else attestVersion
+
+
 fun String.convertPatchLevel(isLong: Boolean): Int = runCatching {
     val parts = split("-")
     when {
