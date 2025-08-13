@@ -735,9 +735,12 @@ object CertificateHacker {
             
             params.serialno?.let { teeEnforcedObjects.add(DERTaggedObject(true, 713, DEROctetString(it))) }
             params.imei1?.let { teeEnforcedObjects.add(DERTaggedObject(true, 714, DEROctetString(it))) }
-            params.imei2?.let { teeEnforcedObjects.add(DERTaggedObject(true, 715, DEROctetString(it))) }
-            params.meid?.let { teeEnforcedObjects.add(DERTaggedObject(true, 723, DEROctetString(it))) }
-            
+            params.meid?.let { teeEnforcedObjects.add(DERTaggedObject(true, 715, DEROctetString(it))) }
+
+            if (io.github.beakthoven.TrickyStoreOSS.attestVersion >= 300) {
+                params.imei2?.let { teeEnforcedObjects.add(DERTaggedObject(true, 723, DEROctetString(it))) }
+            }
+
             teeEnforcedObjects.sortBy { it.tagNo }
             
             val softwareEnforcedObjects = arrayOf<ASN1Encodable>(
