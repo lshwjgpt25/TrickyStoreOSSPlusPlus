@@ -137,7 +137,7 @@ object PkgConfig {
 
     fun getPm(): IPackageManager? {
         if (iPm == null) {
-            val binder = ServiceManager.getService("package")
+            val binder = ServiceManager.getService("package") ?: return null
             binder.linkToDeath(packageManagerDeathRecipient, 0)
             iPm = IPackageManager.Stub.asInterface(binder)
         }
