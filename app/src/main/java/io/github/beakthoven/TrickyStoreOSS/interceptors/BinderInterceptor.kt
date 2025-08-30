@@ -8,7 +8,7 @@ package io.github.beakthoven.TrickyStoreOSS.interceptors
 import android.os.Binder
 import android.os.IBinder
 import android.os.Parcel
-import io.github.beakthoven.TrickyStoreOSS.core.logging.Logger
+import io.github.beakthoven.TrickyStoreOSS.logging.Logger
 
 open class BinderInterceptor : Binder() {
     

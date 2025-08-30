@@ -5,11 +5,17 @@
 
 package io.github.beakthoven.TrickyStoreOSS
 
+import android.security.keystore.KeyProperties
+import io.github.beakthoven.TrickyStoreOSS.CertificateGen.KeyBox
+import io.github.beakthoven.TrickyStoreOSS.CertificateHack.clearLeafAlgorithms
+import io.github.beakthoven.TrickyStoreOSS.logging.Logger
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.IOException
 import java.io.StringReader
+import java.security.cert.Certificate
+import java.util.concurrent.ConcurrentHashMap
 
 class XmlParser(private val xmlContent: String) {
     
@@ -152,4 +158,117 @@ class XmlParser(private val xmlContent: String) {
     }
 }
 
-fun String.toXmlParser(): XmlParser = XmlParser(this)
+object KeyBoxUtils {
+    val keyboxes = ConcurrentHashMap<String, KeyBox>()
+
+    fun hasKeyboxes(): Boolean = keyboxes.isNotEmpty()
+
+    fun readFromXml(xmlData: String?) {
+        keyboxes.clear()
+        clearLeafAlgorithms()
+        
+        if (xmlData == null) {
+            Logger.i("Clearing all keyboxes")
+            return
+        }
+        
+        try {
+            val xmlParser = XmlParser(xmlData.sanitizeXml())
+            
+            val numberOfKeyboxesResult = xmlParser.obtainPath("AndroidAttestation.NumberOfKeyboxes")
+            val numberOfKeyboxes = when (numberOfKeyboxesResult) {
+                is XmlParser.ParseResult.Success -> numberOfKeyboxesResult.attributes["text"]?.toIntOrNull()
+                    ?: throw IllegalArgumentException("Invalid number of keyboxes")
+                is XmlParser.ParseResult.Error -> throw Exception(numberOfKeyboxesResult.message, numberOfKeyboxesResult.cause)
+            }
+            
+            repeat(numberOfKeyboxes) { i ->
+                processKeybox(xmlParser, i)
+            }
+            
+            Logger.i("Successfully updated $numberOfKeyboxes keyboxes")
+        } catch (t: Throwable) {
+            Logger.e("Error loading XML file (keyboxes cleared)", t)
+        }
+    }
+
+    private fun String.sanitizeXml(): String {
+        var content = this
+
+        val boms = listOf(
+            "\uFEFF",
+            "\uFFFE",
+            "\u0000\uFEFF"
+        )
+        content = content.trimStart()
+        for (bom in boms) {
+            content = content.removePrefix(bom)
+        }
+        content = content.trimStart()
+
+        return content.trimEnd()
+    }
+
+    private fun processKeybox(xmlParser: XmlParser, index: Int) {
+        try {
+            val algorithmResult = xmlParser.obtainPath("AndroidAttestation.Keybox.Key[$index]")
+            val keyboxAlgorithm = when (algorithmResult) {
+                is XmlParser.ParseResult.Success -> algorithmResult.attributes["algorithm"]
+                    ?: throw IllegalArgumentException("Missing algorithm attribute")
+                is XmlParser.ParseResult.Error -> throw Exception(algorithmResult.message, algorithmResult.cause)
+            }
+            
+            val privateKeyResult = xmlParser.obtainPath("AndroidAttestation.Keybox.Key[$index].PrivateKey")
+            val privateKeyContent = when (privateKeyResult) {
+                is XmlParser.ParseResult.Success -> privateKeyResult.attributes["text"]
+                    ?: throw IllegalArgumentException("Missing private key text")
+                is XmlParser.ParseResult.Error -> throw Exception(privateKeyResult.message, privateKeyResult.cause)
+            }
+            
+            val numberOfCertificatesResult = xmlParser.obtainPath(
+                "AndroidAttestation.Keybox.Key[$index].CertificateChain.NumberOfCertificates"
+            )
+            val numberOfCertificates = when (numberOfCertificatesResult) {
+                is XmlParser.ParseResult.Success -> numberOfCertificatesResult.attributes["text"]?.toIntOrNull()
+                    ?: throw IllegalArgumentException("Invalid number of certificates")
+                is XmlParser.ParseResult.Error -> throw Exception(numberOfCertificatesResult.message, numberOfCertificatesResult.cause)
+            }
+            
+            val certificateChain = mutableListOf<Certificate>()
+            repeat(numberOfCertificates) { j ->
+                val certResult = xmlParser.obtainPath(
+                    "AndroidAttestation.Keybox.Key[$index].CertificateChain.Certificate[$j]"
+                )
+                val certContent = when (certResult) {
+                    is XmlParser.ParseResult.Success -> certResult.attributes["text"]
+                        ?: throw IllegalArgumentException("Missing certificate text")
+                    is XmlParser.ParseResult.Error -> throw Exception(certResult.message, certResult.cause)
+                }
+                
+                when (val certParseResult = CertificateUtils.parseCertificate(certContent)) {
+                    is CertificateUtils.ParseResult.Success -> certificateChain.add(certParseResult.data)
+                    is CertificateUtils.ParseResult.Error -> throw Exception(certParseResult.message, certParseResult.cause)
+                }
+            }
+            
+            val pemKeyPair = when (val keyParseResult = CertificateUtils.parseKeyPair(privateKeyContent)) {
+                is CertificateUtils.ParseResult.Success -> keyParseResult.data
+                is CertificateUtils.ParseResult.Error -> throw Exception(keyParseResult.message, keyParseResult.cause)
+            }
+            
+            val keyPair = CertificateUtils.convertPemToKeyPair(pemKeyPair)
+            
+            val algorithmName = when (keyboxAlgorithm.lowercase()) {
+                "ecdsa" -> KeyProperties.KEY_ALGORITHM_EC
+                "rsa" -> KeyProperties.KEY_ALGORITHM_RSA
+                else -> keyboxAlgorithm
+            }
+            
+            keyboxes[algorithmName] = KeyBox(pemKeyPair, keyPair, certificateChain)
+            
+        } catch (t: Throwable) {
+            Logger.e("Error processing keybox $index", t)
+            throw t
+        }
+    }
+}

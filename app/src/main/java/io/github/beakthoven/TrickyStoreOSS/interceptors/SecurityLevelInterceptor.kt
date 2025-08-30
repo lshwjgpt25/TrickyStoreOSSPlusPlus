@@ -16,10 +16,10 @@ import android.system.keystore2.KeyDescriptor
 import android.system.keystore2.KeyEntryResponse
 import android.system.keystore2.KeyMetadata
 import androidx.annotation.Keep
-import io.github.beakthoven.TrickyStoreOSS.CertificateHacker
-import io.github.beakthoven.TrickyStoreOSS.core.config.Config
-import io.github.beakthoven.TrickyStoreOSS.core.logging.Logger
-import io.github.beakthoven.TrickyStoreOSS.getTransactCode
+import io.github.beakthoven.TrickyStoreOSS.CertificateGen
+import io.github.beakthoven.TrickyStoreOSS.config.PkgConfig
+import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.getTransactCode
+import io.github.beakthoven.TrickyStoreOSS.logging.Logger
 import io.github.beakthoven.TrickyStoreOSS.putCertificateChain
 import java.security.KeyPair
 import java.security.cert.Certificate
@@ -80,9 +80,9 @@ class SecurityLevelInterceptor(
                 val params = data.createTypedArray(KeyParameter.CREATOR)!!
                 val aFlags = data.readInt()
                 val entropy = data.createByteArray()
-                val kgp = CertificateHacker.KeyGenParameters(params)
-                if (Config.needGenerate(callingUid)) {
-                    val pair = CertificateHacker.generateKeyPair(callingUid, keyDescriptor, attestationKeyDescriptor, kgp, level)
+                val kgp = CertificateGen.KeyGenParameters(params)
+                if (PkgConfig.needGenerate(callingUid)) {
+                    val pair = CertificateGen.generateKeyPair(callingUid, keyDescriptor, attestationKeyDescriptor, kgp, level)
                         ?: return@runCatching
                     keyPairs[Key(callingUid, keyDescriptor.alias)] = Pair(pair.first, pair.second)
                     val response = buildResponse(pair.second, kgp, attestationKeyDescriptor ?: keyDescriptor)
@@ -91,10 +91,10 @@ class SecurityLevelInterceptor(
                     p.writeNoException()
                     p.writeTypedObject(response.metadata, 0)
                     return OverrideReply(0, p)
-                } else if (Config.needHack(callingUid)) {
+                } else if (PkgConfig.needHack(callingUid)) {
                     if ((kgp.purpose.contains(7)) || (attestationKeyDescriptor != null)) {
                         Logger.i("Generating key in generation mode for attestation: uid=$callingUid alias=${keyDescriptor.alias}")
-                        val pair = CertificateHacker.generateKeyPair(callingUid, keyDescriptor, attestationKeyDescriptor, kgp, level)
+                        val pair = CertificateGen.generateKeyPair(callingUid, keyDescriptor, attestationKeyDescriptor, kgp, level)
                             ?: return@runCatching
                         keyPairs[Key(callingUid, keyDescriptor.alias)] = Pair(pair.first, pair.second)
                         val response = buildResponse(pair.second, kgp, attestationKeyDescriptor ?: keyDescriptor)
@@ -119,7 +119,7 @@ class SecurityLevelInterceptor(
 
     private fun buildResponse(
         chain: List<Certificate>,
-        params: CertificateHacker.KeyGenParameters,
+        params: CertificateGen.KeyGenParameters,
         descriptor: KeyDescriptor
     ): KeyEntryResponse {
         val response = KeyEntryResponse()

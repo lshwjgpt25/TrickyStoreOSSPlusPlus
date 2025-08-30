@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package io.github.beakthoven.TrickyStoreOSS.core.logging
+package io.github.beakthoven.TrickyStoreOSS.logging
 
 import android.util.Log
 
@@ -27,7 +27,7 @@ object Logger {
     }
     
     fun e(message: String, throwable: Throwable) {
-        Log.e(TAG, "wtf: $message", throwable)
+        Log.e(TAG, "fatal: $message", throwable)
     }
     
     fun i(message: String) {

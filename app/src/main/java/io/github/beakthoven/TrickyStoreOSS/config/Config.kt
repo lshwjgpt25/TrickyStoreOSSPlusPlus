@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package io.github.beakthoven.TrickyStoreOSS.core.config
+package io.github.beakthoven.TrickyStoreOSS.config
 
 import android.content.pm.IPackageManager
 import android.os.FileObserver
 import android.os.IBinder
 import android.os.IInterface
 import android.os.ServiceManager
-import io.github.beakthoven.TrickyStoreOSS.CertificateHacker
-import io.github.beakthoven.TrickyStoreOSS.core.logging.Logger
-import io.github.beakthoven.TrickyStoreOSS.teeStatus
+import io.github.beakthoven.TrickyStoreOSS.AttestUtils.TEEStatus
+import io.github.beakthoven.TrickyStoreOSS.KeyBoxUtils
+import io.github.beakthoven.TrickyStoreOSS.logging.Logger
 import java.io.File
 
-object Config {
+object PkgConfig {
     private val hackPackages = mutableSetOf<String>()
     private val generatePackages = mutableSetOf<String>()
     private val packageModes = mutableMapOf<String, Mode>()
@@ -55,7 +55,7 @@ object Config {
     }
 
     private fun updateKeyBox(f: File?) = runCatching {
-        CertificateHacker.readFromXml(f?.readText())
+        KeyBoxUtils.readFromXml(f?.readText())
     }.onFailure {
         Logger.e("failed to update keybox", it)
     }
@@ -72,7 +72,7 @@ object Config {
 
     private fun storeTEEStatus(root: File) {
         val statusFile = File(root, TEE_STATUS_FILE)
-        teeBroken = !teeStatus
+        teeBroken = !TEEStatus
         try {
             statusFile.writeText("teeBroken=${teeBroken}")
             Logger.i("TEE status written to $statusFile: teeBroken=$teeBroken") 

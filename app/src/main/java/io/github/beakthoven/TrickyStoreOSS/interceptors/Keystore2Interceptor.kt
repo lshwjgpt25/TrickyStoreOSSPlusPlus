@@ -12,13 +12,14 @@ import android.os.Parcel
 import android.system.keystore2.IKeystoreService
 import android.system.keystore2.KeyDescriptor
 import android.system.keystore2.KeyEntryResponse
-import io.github.beakthoven.TrickyStoreOSS.CertificateHacker
+import io.github.beakthoven.TrickyStoreOSS.CertificateHack
 import io.github.beakthoven.TrickyStoreOSS.CertificateUtils
-import io.github.beakthoven.TrickyStoreOSS.core.config.Config
-import io.github.beakthoven.TrickyStoreOSS.core.logging.Logger
-import io.github.beakthoven.TrickyStoreOSS.getTransactCode
+import io.github.beakthoven.TrickyStoreOSS.KeyBoxUtils
+import io.github.beakthoven.TrickyStoreOSS.config.PkgConfig
 import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.createTypedObjectReply
+import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.getTransactCode
 import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.hasException
+import io.github.beakthoven.TrickyStoreOSS.logging.Logger
 import io.github.beakthoven.TrickyStoreOSS.putCertificateChain
 
 @SuppressLint("BlockedPrivateApi")
@@ -74,17 +75,17 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
         data: Parcel
     ): Result {
         if (code == getKeyEntryTransaction) {
-            if (CertificateHacker.hasKeyboxes()) {
+            if (KeyBoxUtils.hasKeyboxes()) {
                 Logger.d("intercept pre  $target uid=$callingUid pid=$callingPid dataSz=${data.dataSize()}")
                 kotlin.runCatching {
                     data.enforceInterface(IKeystoreService.DESCRIPTOR)
                     val descriptor = data.readTypedObject(KeyDescriptor.CREATOR) ?: return@runCatching
-                    if (Config.needGenerate(callingUid)) {
+                    if (PkgConfig.needGenerate(callingUid)) {
                         val response = SecurityLevelInterceptor.getKeyResponse(callingUid, descriptor.alias)
                             ?: return@runCatching
                         Logger.i("Generate key for uid=$callingUid alias=${descriptor.alias}")
                         return createTypedObjectReply(response)
-                    } else if (Config.needHack(callingUid)) {
+                    } else if (PkgConfig.needHack(callingUid)) {
                         if (SecurityLevelInterceptor.shouldSkipLeafHack(callingUid, descriptor.alias)) {
                             Logger.i("skip leaf hack for uid=$callingUid alias=${descriptor.alias}")
                             val response = SecurityLevelInterceptor.getKeyResponse(callingUid, descriptor.alias)
@@ -138,7 +139,7 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
                 if (response != null) {
                     val chain = CertificateUtils.run { response.getCertificateChain() }
                 if (chain != null) {
-                        val newChain = CertificateHacker.hackCertificateChain(chain)
+                        val newChain = CertificateHack.hackCertificateChain(chain)
                         response.putCertificateChain(newChain).getOrThrow()
                         Logger.i("Hacked certificate for uid=$callingUid")
                         return createTypedObjectReply(response)

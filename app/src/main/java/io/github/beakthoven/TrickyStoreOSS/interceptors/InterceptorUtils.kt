@@ -11,7 +11,7 @@ import android.os.Parcelable
 import android.os.ServiceManager
 import android.security.KeyStore
 import android.security.keystore.KeystoreResponse
-import io.github.beakthoven.TrickyStoreOSS.core.logging.Logger
+import io.github.beakthoven.TrickyStoreOSS.logging.Logger
 import kotlin.system.exitProcess
 
 abstract class BaseKeystoreInterceptor : BinderInterceptor() {
@@ -95,6 +95,10 @@ abstract class BaseKeystoreInterceptor : BinderInterceptor() {
 }
 
 object InterceptorUtils {
+    
+    fun getTransactCode(clazz: Class<*>, method: String): Int =
+        clazz.getDeclaredField("TRANSACTION_$method").apply { isAccessible = true }
+            .getInt(null)
     
     fun createSuccessKeystoreResponse(): KeystoreResponse {
         val parcel = Parcel.obtain()

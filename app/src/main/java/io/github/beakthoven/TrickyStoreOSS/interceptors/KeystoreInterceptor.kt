@@ -19,15 +19,17 @@ import android.security.keystore.IKeystoreCertificateChainCallback
 import android.security.keystore.IKeystoreExportKeyCallback
 import android.security.keystore.IKeystoreKeyCharacteristicsCallback
 import android.security.keystore.IKeystoreService
-import io.github.beakthoven.TrickyStoreOSS.CertificateHacker
-import io.github.beakthoven.TrickyStoreOSS.core.config.Config
-import io.github.beakthoven.TrickyStoreOSS.core.logging.Logger
-import io.github.beakthoven.TrickyStoreOSS.getTransactCode
+import io.github.beakthoven.TrickyStoreOSS.CertificateGen
+import io.github.beakthoven.TrickyStoreOSS.CertificateHack
+import io.github.beakthoven.TrickyStoreOSS.KeyBoxUtils
+import io.github.beakthoven.TrickyStoreOSS.config.PkgConfig
 import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.createByteArrayReply
 import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.createSuccessKeystoreResponse
 import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.createSuccessReply
 import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.extractAlias
+import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.getTransactCode
 import io.github.beakthoven.TrickyStoreOSS.interceptors.InterceptorUtils.hasException
+import io.github.beakthoven.TrickyStoreOSS.logging.Logger
 import java.math.BigInteger
 import java.security.KeyPair
 import java.util.Date
@@ -51,7 +53,7 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
 
     private const val DESCRIPTOR = "android.security.keystore.IKeystoreService"
 
-    private val keyArguments = HashMap<Key, CertificateHacker.KeyGenParameters>()
+    private val keyArguments = HashMap<Key, CertificateGen.KeyGenParameters>()
     private val keyPairs = HashMap<Key, KeyPair>()
 
     data class Key(val uid: Int, val alias: String)
@@ -64,14 +66,14 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
         callingPid: Int,
         data: Parcel
     ): Result {
-        if (CertificateHacker.hasKeyboxes()) {
+        if (KeyBoxUtils.hasKeyboxes()) {
             if (code == getTransaction) {
-                if (Config.needHack(callingUid)) {
+                if (PkgConfig.needHack(callingUid)) {
                     return Continue
-                } else if (Config.needGenerate(callingUid)) {
+                } else if (PkgConfig.needGenerate(callingUid)) {
                     return Skip
                 }
-            } else if (Config.needGenerate(callingUid)) {
+            } else if (PkgConfig.needGenerate(callingUid)) {
                 when (code) {
                     generateKeyTransaction -> {
                         kotlin.runCatching {
@@ -81,12 +83,12 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
                             Logger.i("generateKeyTransaction uid $callingUid alias $alias")
                             val check = data.readInt()
                             val kma = KeymasterArguments()
-                            val kgp = CertificateHacker.KeyGenParameters()
+                            val kgp = CertificateGen.KeyGenParameters()
                             if (check == 1) {
                                 kma.readFromParcel(data)
                                 kgp.algorithm = kma.getEnum(KeymasterDefs.KM_TAG_ALGORITHM, 0)
                                 kgp.keySize = kma.getUnsignedInt(KeymasterDefs.KM_TAG_KEY_SIZE, 0).toInt()
-                                kgp.setEcCurveName(kgp.keySize)
+                                //kgp.setEcCurveName(kgp.keySize)
                                 kgp.purpose = kma.getEnums(KeymasterDefs.KM_TAG_PURPOSE)
                                 kgp.digest = kma.getEnums(KeymasterDefs.KM_TAG_DIGEST)
                                 kgp.certificateNotBefore = kma.getDate(KeymasterDefs.KM_TAG_ACTIVE_DATETIME, Date())
@@ -146,7 +148,7 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
                             val callback = IKeystoreExportKeyCallback.Stub.asInterface(data.readStrongBinder())
                             val alias = data.readString()!!.extractAlias()
                             Logger.i("exportKeyTransaction uid $callingUid alias $alias")
-                            val kp = CertificateHacker.generateKeyPair(keyArguments[Key(callingUid, alias)]!!)
+                            val kp = CertificateGen.generateKeyPair(keyArguments[Key(callingUid, alias)]!!)
                             keyPairs[Key(callingUid, alias)] = kp!!
 
                             val erP = Parcel.obtain()
@@ -181,7 +183,7 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
                                 val key = Key(callingUid, alias)
                                 val ka = keyArguments[key]!!
                                 ka.attestationChallenge = attestationChallenge
-                                val chain = CertificateHacker.generateChain(callingUid, ka, keyPairs[key]!!)
+                                val chain = CertificateGen.generateChain(callingUid, ka, keyPairs[key]!!)
 
                                 val kcc = KeymasterCertificateChain(chain)
                                 callback.onFinished(ksr, kcc)
@@ -218,12 +220,12 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
             var response = reply.createByteArray()
             when {
                 alias.startsWith(Credentials.USER_CERTIFICATE) -> {
-                    response = CertificateHacker.hackUserCertificate(response!!, alias.extractAlias(), callingUid)
+                    response = CertificateHack.hackUserCertificate(response!!, alias.extractAlias(), callingUid)
                     Logger.i("Hacked leaf certificate for uid=$callingUid")
                     return createByteArrayReply(response)
                 }
                 alias.startsWith(Credentials.CA_CERTIFICATE) -> {
-                    response = CertificateHacker.hackCACertificateChain(response!!, alias.extractAlias(), callingUid)
+                    response = CertificateHack.hackCACertificateChain(response!!, alias.extractAlias(), callingUid)
                     Logger.i("Hacked CA certificate chain for uid=$callingUid")
                     return createByteArrayReply(response)
                 }
