@@ -10,6 +10,10 @@ import android.os.IBinder;
 public interface IPackageManager {
     String[] getPackagesForUid(int uid);
 
+    ApplicationInfo getApplicationInfo(String packageName, int flags, int userId);
+
+    ApplicationInfo getApplicationInfo(String packageName, long flags, int userId);
+
     PackageInfo getPackageInfo(String packageName, long flags, int userId);
 
     PackageInfo getPackageInfo(String packageName, int flags, int userId);

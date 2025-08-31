@@ -9,6 +9,7 @@ import android.content.pm.IPackageManager
 import android.os.FileObserver
 import android.os.IBinder
 import android.os.IInterface
+import android.os.Process
 import android.os.ServiceManager
 import io.github.beakthoven.TrickyStoreOSS.AttestUtils.TEEStatus
 import io.github.beakthoven.TrickyStoreOSS.KeyBoxUtils
@@ -173,6 +174,33 @@ object PkgConfig {
         }
         return false
     }.onFailure { Logger.e("failed to get packages", it) }.getOrNull() ?: false
+
+    private fun getTargetPackages(): Set<String> {
+        return (hackPackages + generatePackages + packageModes.keys).toSet()
+    }
+
+    fun getTargetPackageUids(): Set<Int> {
+        val result = mutableSetOf<Int>()
+        val pm = getPm() ?: return emptySet()
+        val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) 0L else 0
+        val userId = Process.myUid() / 100000
+
+        getTargetPackages().forEach { pkg ->
+            kotlin.runCatching {
+                val appInfo = pm.getApplicationInfo(pkg, flags, userId)
+                if (appInfo != null) {
+                    result.add(appInfo.uid)
+                    Logger.d("Got UID ${appInfo.uid} for package: $pkg")
+                } else {
+                    Logger.e("ApplicationInfo is null for package: $pkg")
+                }
+            }.onFailure {
+                Logger.e("Failed to get UID for package: $pkg", it)
+            }
+        }
+
+        return result
+    }
 
     @Volatile
     var _customPatchLevel: CustomPatchLevel? = null
