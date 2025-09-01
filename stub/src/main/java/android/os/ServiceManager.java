@@ -7,18 +7,22 @@ package android.os;
 
 public class ServiceManager {
     public static IBinder getService(String name) {
-        throw new UnsupportedOperationException("STUB!");
+        throw new UnsupportedOperationException("");
+    }
+
+    public static IBinder waitForService(String name) {
+        throw new UnsupportedOperationException("");
     }
 
     public static void addService(String name, IBinder binder) {
-        throw new UnsupportedOperationException("STUB!");
+        throw new UnsupportedOperationException("");
     }
 
     public static IBinder checkService(String name) {
-        throw new UnsupportedOperationException("STUB!");
+        throw new UnsupportedOperationException("");
     }
 
     public static String[] listServices() {
-        throw new UnsupportedOperationException("STUB!");
+        throw new UnsupportedOperationException("");
     }
 }

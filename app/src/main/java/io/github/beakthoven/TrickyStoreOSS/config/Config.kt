@@ -6,6 +6,7 @@
 package io.github.beakthoven.TrickyStoreOSS.config
 
 import android.content.pm.IPackageManager
+import android.os.Build
 import android.os.FileObserver
 import android.os.IBinder
 import android.os.IInterface
@@ -182,7 +183,7 @@ object PkgConfig {
     fun getTargetPackageUids(): Set<Int> {
         val result = mutableSetOf<Int>()
         val pm = getPm() ?: return emptySet()
-        val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) 0L else 0
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) 0L else 0
         val userId = Process.myUid() / 100000
 
         getTargetPackages().forEach { pkg ->
@@ -240,15 +241,21 @@ object PkgConfig {
     }
 
     private fun waitAndGetSystemService(name: String): IBinder? {
-        var tryCount = 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return ServiceManager.waitForService(name)
+        }
 
+        var tryCount = 0
         while (tryCount++ < 70) {
             val service = ServiceManager.getService(name)
-            if (service != null) return service
-            Logger.e("Package manager is null, waiting for 500ms")
+            if (service != null) {
+                Logger.d("Got $name service after $tryCount tries")
+                return service
+            }
             Thread.sleep(500)
         }
 
+        Logger.e("Failed to get $name service")
         return null
     }
 }
