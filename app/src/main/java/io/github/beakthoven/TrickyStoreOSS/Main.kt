@@ -36,22 +36,7 @@ private fun initializeInterceptors() {
     }
     
     PkgConfig.initialize()
-    clearKeyStore()
     Logger.i("Interceptors initialized successfully")
-}
-
-private fun clearKeyStore() {
-    val targetUIDs = PkgConfig.getTargetPackageUids()
-    Logger.i("Clearing keystore for ${targetUIDs.size} target packages")
-
-    targetUIDs.forEach { uid ->
-        kotlin.runCatching {
-            android.security.AndroidKeyStoreMaintenance.clearNamespace(0, uid.toLong())
-            Logger.d("Cleared keystore namespace for UID: $uid")
-        }.onFailure {
-            Logger.e("Failed to clear keystore for UID: $uid", it)
-        }
-    }
 }
 
 private fun selectKeystoreInterceptor() = when {
