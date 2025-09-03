@@ -180,17 +180,25 @@ object PkgConfig {
         return (hackPackages + generatePackages + packageModes.keys).toSet()
     }
 
-    fun getTargetPackageUids(): Set<Int> {
-        val result = mutableSetOf<Int>()
+    fun getKSClearPackageUids(): Set<Int> {
+        val uids = mutableSetOf<Int>()
         val pm = getPm() ?: return emptySet()
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) 0L else 0
         val userId = Process.myUid() / 100000
 
-        getTargetPackages().forEach { pkg ->
+        val detectorPackages = setOf(
+            "io.github.vvb2060.keyattestation",
+            "io.github.vvb2060.mahoshojo",
+            "io.github.qwq233.keyattestation"
+        )
+
+        val KeyStoreClearPackages = getTargetPackages().intersect(detectorPackages)
+
+        KeyStoreClearPackages.forEach { pkg ->
             kotlin.runCatching {
                 val appInfo = pm.getApplicationInfo(pkg, flags, userId)
                 if (appInfo != null) {
-                    result.add(appInfo.uid)
+                    uids.add(appInfo.uid)
                     Logger.d("Got UID ${appInfo.uid} for package: $pkg")
                 } else {
                     Logger.e("ApplicationInfo is null for package: $pkg")
@@ -200,7 +208,7 @@ object PkgConfig {
             }
         }
 
-        return result
+        return uids
     }
 
     @Volatile
