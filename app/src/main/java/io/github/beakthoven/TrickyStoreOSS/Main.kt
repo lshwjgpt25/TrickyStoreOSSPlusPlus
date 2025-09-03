@@ -41,7 +41,7 @@ private fun initializeInterceptors() {
 }
 
 private fun clearKeyStore() {
-    val targetUIDs = PkgConfig.getKSClearPackageUids()
+    val targetUIDs = PkgConfig.getTargetPackageUids()
     Logger.i("Clearing keystore for ${targetUIDs.size} target packages")
 
     targetUIDs.forEach { uid ->
