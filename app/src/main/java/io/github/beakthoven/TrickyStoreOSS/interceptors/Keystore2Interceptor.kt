@@ -146,14 +146,34 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
         } else if (code == getKeyEntryTransaction) {
             try {
                 data.enforceInterface("android.system.keystore2.IKeystoreService")
+                val descriptor = data.readTypedObject(KeyDescriptor.CREATOR)
                 val response = reply.readTypedObject(KeyEntryResponse.CREATOR)
-                if (response != null) {
+                if (response != null && descriptor != null) {
                     val chain = CertificateUtils.run { response.getCertificateChain() }
-                if (chain != null) {
-                        val newChain = CertificateHack.hackCertificateChain(chain)
-                        response.putCertificateChain(newChain).getOrThrow()
-                        Logger.i("Hacked certificate for uid=$callingUid")
-                        return createTypedObjectReply(response)
+                    if (chain != null) {
+                        // Check if we have a cached certificate for this key
+                        val cachedInfo = SecurityLevelInterceptor.keys[SecurityLevelInterceptor.Key(callingUid, descriptor.alias)]
+                        if (cachedInfo != null) {
+                            val cachedChain = CertificateUtils.run { cachedInfo.response.getCertificateChain() }
+                            // Compare if the certificate from keystore matches our cached certificate
+                            if (cachedChain != null && isSameCertificate(chain[0], cachedChain[0])) {
+                                // This is our generated certificate, proceed with hacking
+                                val newChain = CertificateHack.hackCertificateChain(chain)
+                                response.putCertificateChain(newChain).getOrThrow()
+                                Logger.i("Hacked our generated certificate for uid=$callingUid alias=${descriptor.alias}")
+                                return createTypedObjectReply(response)
+                            } else {
+                                // Certificate was modified by user (e.g., setEntry), return original
+                                Logger.i("Certificate modified by user (setEntry), returning original for uid=$callingUid alias=${descriptor.alias}")
+                                return Skip
+                            }
+                        } else {
+                            // No cached certificate, proceed with normal hacking
+                            val newChain = CertificateHack.hackCertificateChain(chain)
+                            response.putCertificateChain(newChain).getOrThrow()
+                            Logger.i("Hacked certificate for uid=$callingUid")
+                            return createTypedObjectReply(response)
+                        }
                     } else {
                         p.recycle()
                     }
@@ -166,5 +186,14 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
             }
         }
         return Skip
+    }
+
+    private fun isSameCertificate(cert1: java.security.cert.Certificate, cert2: java.security.cert.Certificate): Boolean {
+        return try {
+            cert1.encoded.contentEquals(cert2.encoded)
+        } catch (e: Exception) {
+            Logger.e("Failed to compare certificates", e)
+            false
+        }
     }
 }

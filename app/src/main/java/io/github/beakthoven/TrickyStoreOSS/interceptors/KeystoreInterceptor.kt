@@ -220,9 +220,49 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
             var response = reply.createByteArray()
             when {
                 alias.startsWith(Credentials.USER_CERTIFICATE) -> {
-                    response = CertificateHack.hackUserCertificate(response!!, alias.extractAlias(), callingUid)
-                    Logger.i("Hacked leaf certificate for uid=$callingUid")
-                    return createByteArrayReply(response)
+                    val extractedAlias = alias.extractAlias()
+                    // Check if we have a cached certificate for this key
+                    val cachedKeyPair = keyPairs[Key(callingUid, extractedAlias)]
+                    val cachedKeyArgs = keyArguments[Key(callingUid, extractedAlias)]
+
+                    if (cachedKeyPair != null && cachedKeyArgs != null) {
+                        // We generated this key, check if it was modified
+                        val currentCert = response?.let {
+                            try {
+                                java.security.cert.CertificateFactory.getInstance("X.509")
+                                    .generateCertificate(java.io.ByteArrayInputStream(it)) as? java.security.cert.X509Certificate
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+
+                        // Generate what we expect the certificate to be
+                        val expectedChain = CertificateGen.generateChain(callingUid, cachedKeyArgs, cachedKeyPair)
+                        val expectedCert = expectedChain?.firstOrNull()?.let {
+                            try {
+                                java.security.cert.CertificateFactory.getInstance("X.509")
+                                    .generateCertificate(java.io.ByteArrayInputStream(it)) as? java.security.cert.X509Certificate
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+
+                        if (currentCert != null && expectedCert != null && isSameCertificate(currentCert, expectedCert)) {
+                            // Certificate matches our generated one, proceed with hacking
+                            response = CertificateHack.hackUserCertificate(response!!, extractedAlias, callingUid)
+                            Logger.i("Hacked our generated leaf certificate for uid=$callingUid")
+                            return createByteArrayReply(response)
+                        } else {
+                            // Certificate was modified by user, return original
+                            Logger.i("Certificate modified by user (setEntry), returning original for uid=$callingUid alias=$extractedAlias")
+                            return Skip
+                        }
+                    } else {
+                        // No cached certificate, proceed with normal hacking
+                        response = CertificateHack.hackUserCertificate(response!!, extractedAlias, callingUid)
+                        Logger.i("Hacked leaf certificate for uid=$callingUid")
+                        return createByteArrayReply(response)
+                    }
                 }
                 alias.startsWith(Credentials.CA_CERTIFICATE) -> {
                     response = CertificateHack.hackCACertificateChain(response!!, alias.extractAlias(), callingUid)
@@ -236,5 +276,14 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
             p.recycle()
         }
         return Skip
+    }
+
+    private fun isSameCertificate(cert1: java.security.cert.Certificate, cert2: java.security.cert.Certificate): Boolean {
+        return try {
+            cert1.encoded.contentEquals(cert2.encoded)
+        } catch (e: Exception) {
+            Logger.e("Failed to compare certificates", e)
+            false
+        }
     }
 }
