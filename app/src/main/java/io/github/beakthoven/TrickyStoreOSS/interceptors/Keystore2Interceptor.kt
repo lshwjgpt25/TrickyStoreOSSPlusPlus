@@ -151,6 +151,12 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
                 if (response != null && descriptor != null) {
                     val chain = CertificateUtils.run { response.getCertificateChain() }
                     if (chain != null) {
+                        // Only hack certificates for apps configured in target.txt
+                        if (!PkgConfig.needHack(callingUid) && !PkgConfig.needGenerate(callingUid)) {
+                            Logger.d("App not in target.txt, skipping hack for uid=$callingUid")
+                            return Skip
+                        }
+
                         // Check if we have a cached certificate for this key
                         val cachedInfo = SecurityLevelInterceptor.keys[SecurityLevelInterceptor.Key(callingUid, descriptor.alias)]
                         if (cachedInfo != null) {

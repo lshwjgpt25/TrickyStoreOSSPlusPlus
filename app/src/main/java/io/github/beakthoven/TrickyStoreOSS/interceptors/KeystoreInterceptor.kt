@@ -218,6 +218,13 @@ object KeystoreInterceptor : BaseKeystoreInterceptor() {
             data.enforceInterface(DESCRIPTOR)
             val alias = data.readString() ?: ""
             var response = reply.createByteArray()
+
+            // Only hack certificates for apps configured in target.txt
+            if (!PkgConfig.needHack(callingUid) && !PkgConfig.needGenerate(callingUid)) {
+                Logger.d("App not in target.txt, skipping hack for uid=$callingUid")
+                return Skip
+            }
+
             when {
                 alias.startsWith(Credentials.USER_CERTIFICATE) -> {
                     val extractedAlias = alias.extractAlias()
